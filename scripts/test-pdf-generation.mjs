@@ -75,6 +75,9 @@ async function run() {
 
     await page.setContent(html, { waitUntil: "networkidle" });
     await page.emulateMedia({ media: "print" });
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+    });
 
     // Save screenshot preview
     await page.screenshot({ path: pngPreviewPath, fullPage: true });

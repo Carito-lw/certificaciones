@@ -50,12 +50,12 @@ export function validateCertificateQrMatch(code: string, qrSvg: string): boolean
 export function formatCourseTitleHtml(course: string): string {
   const clean = course.trim();
   if (/python con an[aá]lisis de datos y vibe coding/i.test(clean)) {
-    return "PYTHON CON ANÁLISIS<br />DE DATOS Y VIBE CODING";
+    return `<div>PYTHON&nbsp;CON&nbsp;ANÁLISIS</div><div>DE&nbsp;DATOS&nbsp;Y&nbsp;VIBE&nbsp;CODING</div>`;
   }
   if (/producci[oó]n y validaci[oó]n de contenidos/i.test(clean)) {
-    return "PRODUCCIÓN Y VALIDACIÓN<br />DE CONTENIDOS";
+    return `<div>PRODUCCIÓN&nbsp;Y&nbsp;VALIDACIÓN</div><div>DE&nbsp;CONTENIDOS</div>`;
   }
-  return clean.toUpperCase();
+  return `<div>${clean.toUpperCase()}</div>`;
 }
 
 export function formatIssueDateSpanish(dateStr?: string | null): string {
@@ -87,10 +87,12 @@ export function renderCertificateHtml(
 ): string {
   const cleanCode = data.certificateCode.trim().toUpperCase().replace(/\s+/g, "");
   
-  // Nombre completo
-  const fullName = data.participantName
-    ? data.participantName
-    : `${data.firstName || ""} ${data.lastName || ""}`.trim();
+  // Construcción del nombre completo preservando espacios estrictamente
+  const rawFullName = data.participantName
+    ? data.participantName.trim()
+    : [data.firstName, data.lastName].filter(Boolean).join(" ").trim();
+  
+  const fullName = rawFullName.split(/\s+/).filter(Boolean).join("&nbsp;");
 
   // QR SVG programático
   const qrSvg = options.qrSvg || generateCertificateQrSvg(cleanCode);
@@ -103,8 +105,8 @@ export function renderCertificateHtml(
     );
   }
 
-  // DNI formateado
-  const dniText = data.dni ? `DNI ${data.dni}` : "";
+  // DNI formateado con espacio protegido
+  const dniText = data.dni ? `DNI&nbsp;${data.dni}` : "";
   const courseTitleHtml = formatCourseTitleHtml(data.courseName);
   const formattedDate = formatIssueDateSpanish(data.issueDate);
   const formattedPeriod = (data.period || "").replace("–", "y").replace("-", "y");
@@ -113,7 +115,7 @@ export function renderCertificateHtml(
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>Certificado ${cleanCode} — ${fullName}</title>
+  <title>Certificado ${cleanCode} — ${rawFullName}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
@@ -168,7 +170,8 @@ export function renderCertificateHtml(
       font-family: 'Plus Jakarta Sans', Arial, sans-serif;
       font-size: 3.05mm;
       font-weight: 700;
-      letter-spacing: 0.03em;
+      letter-spacing: normal;
+      word-spacing: normal;
       color: #161310;
       line-height: 1;
       white-space: nowrap;
@@ -192,22 +195,26 @@ export function renderCertificateHtml(
       margin-bottom: 3.8mm;
     }
 
-    .cert-student-name {
+    /* Nombre del alumno */
+    .certificate-name, .cert-student-name {
+      display: block;
+      white-space: normal;
+      word-spacing: normal;
+      letter-spacing: normal;
+      line-height: 1.05;
       font-family: 'Plus Jakarta Sans', Arial, sans-serif;
       font-size: 9.3mm;
       font-weight: 800;
       color: #0f0e0c;
-      letter-spacing: 0px !important;
-      word-spacing: 1.5px !important;
-      line-height: 1.08;
-      margin-bottom: 3.6mm;
+      margin-bottom: 2.2mm; /* ~8px: Nombre -> DNI */
     }
 
+    /* Fila de DNI */
     .cert-dni-row {
       display: flex;
       align-items: center;
       gap: 2.8mm;
-      margin-bottom: 5.2mm;
+      margin-bottom: 5.8mm; /* ~22px: DNI -> descripcion */
     }
 
     .cert-orange-pill {
@@ -221,45 +228,61 @@ export function renderCertificateHtml(
     .cert-dni-text {
       font-size: 3.55mm;
       font-weight: 600;
-      letter-spacing: 0.04em;
+      letter-spacing: normal;
+      word-spacing: normal;
       color: #1f1d19;
     }
 
+    /* Texto de introduccion */
     .cert-completion-intro {
       font-size: 3.55mm;
       font-weight: 500;
       color: #2b2824;
-      margin-bottom: 4.8mm;
-      letter-spacing: 0.005em;
+      margin-bottom: 4.2mm; /* ~16px: Descripcion -> curso */
+      letter-spacing: normal;
+      word-spacing: normal;
     }
 
-    .cert-course-title {
+    /* Titulo del curso en dos lineas controladas */
+    .certificate-course, .cert-course-title {
+      display: block;
+      white-space: normal;
+      word-spacing: normal;
+      letter-spacing: normal;
+      line-height: 1.15;
+      max-width: 100%;
       font-family: 'Plus Jakarta Sans', Arial, sans-serif;
       font-size: 6.8mm;
       font-weight: 800;
       color: #0f0e0c;
-      letter-spacing: 0px !important;
-      word-spacing: 1.5px !important;
-      line-height: 1.18;
       text-transform: uppercase;
-      margin-bottom: 4.6mm;
-      max-width: 150mm;
-      word-break: normal;
+      margin-bottom: 5.2mm; /* ~20px: Curso -> duracion */
     }
 
+    .certificate-course div, .cert-course-title div {
+      white-space: normal;
+      word-spacing: normal;
+      letter-spacing: normal;
+    }
+
+    /* Duracion y periodo */
     .cert-duration-period {
       font-size: 3.45mm;
       font-weight: 500;
       line-height: 1.38;
       color: #2e2b26;
-      margin-bottom: 5.2mm;
+      margin-bottom: 7.2mm; /* ~27px: Duracion -> fecha */
+      letter-spacing: normal;
+      word-spacing: normal;
     }
 
+    /* Fecha y ubicacion */
     .cert-location-date {
       font-size: 3.45mm;
       font-weight: 500;
       color: #2b2824;
-      letter-spacing: 0.01em;
+      letter-spacing: normal;
+      word-spacing: normal;
     }
 
     /* Sector Inferior Derecho: Código QR Real */
@@ -294,7 +317,7 @@ export function renderCertificateHtml(
     <!-- Cuerpo Principal (Sector Izquierdo) -->
     <div class="cert-body">
       <div class="cert-heading-certificamos">CERTIFICAMOS QUE</div>
-      <h1 class="cert-student-name">${fullName}</h1>
+      <h1 class="certificate-name cert-student-name">${fullName}</h1>
       
       ${
         dniText
@@ -309,7 +332,9 @@ export function renderCertificateHtml(
 
       <p class="cert-completion-intro">ha completado satisfactoriamente la capacitación</p>
       
-      <h2 class="cert-course-title">${courseTitleHtml}</h2>
+      <div class="certificate-course cert-course-title">
+        ${courseTitleHtml}
+      </div>
 
       <p class="cert-duration-period">
         con una duración total de ${data.hours} horas,<br />

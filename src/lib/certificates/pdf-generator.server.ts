@@ -84,6 +84,9 @@ export async function generateSingleCertificatePdf(
 
     await page.setContent(html, { waitUntil: "networkidle" });
     await page.emulateMedia({ media: "print" });
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+    });
 
     const pdfBuffer = await page.pdf({
       format: "A4",
@@ -132,6 +135,9 @@ export async function generateCertificatesZip(
 
       await page.setContent(html, { waitUntil: "networkidle" });
       await page.emulateMedia({ media: "print" });
+      await page.evaluate(async () => {
+        await document.fonts.ready;
+      });
 
       const pdfBuffer = await page.pdf({
         format: "A4",
