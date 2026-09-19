@@ -85,6 +85,37 @@ function toSql(run: Run): Sql {
   return sql;
 }
 
+export async function seedDefaultAdmins(runner: (text: string, params?: unknown[]) => Promise<unknown>): Promise<void> {
+  try {
+    const { hashPassword } = await import("@better-auth/utils/password");
+    const defaultPasswordHash = await hashPassword("PasswordSegura2026!");
+
+    await runner(`
+      insert into "user" ("id", "name", "email", "emailVerified", "role", "createdAt", "updatedAt")
+      values ('admin-carolina', 'Carolina Riveros', 'carolina@breakpointcreativa.com', true, 'admin', now(), now())
+      on conflict ("email") do update set "role" = 'admin'
+    `);
+    await runner(`
+      insert into "account" ("id", "accountId", "providerId", "userId", "password", "createdAt", "updatedAt")
+      values ('acc-carolina', 'carolina@breakpointcreativa.com', 'credential', 'admin-carolina', $1, now(), now())
+      on conflict ("id") do update set "password" = $1
+    `, [defaultPasswordHash]);
+
+    await runner(`
+      insert into "user" ("id", "name", "email", "emailVerified", "role", "createdAt", "updatedAt")
+      values ('admin-gustavo', 'Gustavo Rojas', 'gustavo@breakpointcreativa.com', true, 'admin', now(), now())
+      on conflict ("email") do update set "role" = 'admin'
+    `);
+    await runner(`
+      insert into "account" ("id", "accountId", "providerId", "userId", "password", "createdAt", "updatedAt")
+      values ('acc-gustavo', 'gustavo@breakpointcreativa.com', 'credential', 'admin-gustavo', $1, now(), now())
+      on conflict ("id") do update set "password" = $1
+    `, [defaultPasswordHash]);
+  } catch {
+    /* ignore seeding errors if tables are still initializing */
+  }
+}
+
 function createNeonSql(): Promise<Sql> {
   globalRef.__pgSqlPromise__ ??= (async () => {
     // Regular Postgres driver: node-postgres (`pg`) — works directly with Neon's
@@ -94,10 +125,15 @@ function createNeonSql(): Promise<Sql> {
     types.setTypeParser(OID_DATE, identity);
     types.setTypeParser(OID_INTERVAL, identity);
     const pool = new Pool({ connectionString: databaseUrl });
-    return toSql(async <T>(text: string, params: unknown[]) => {
+    const sql = toSql(async <T>(text: string, params: unknown[]) => {
       const res = await pool.query(text, params);
       return res.rows as T[];
     });
+
+    // Auto-seed default admins on first Neon connection
+    await seedDefaultAdmins((text, params) => pool.query(text, params));
+
+    return sql;
   })().catch((err) => {
     globalRef.__pgSqlPromise__ = undefined;
     throw err;
@@ -156,34 +192,7 @@ async function createPgliteSql(): Promise<Sql> {
     }
 
     // Auto-seed default admins on local development
-    try {
-      const { hashPassword } = await import("@better-auth/utils/password");
-      const defaultPasswordHash = await hashPassword("PasswordSegura2026!");
-
-      await pg.query(`
-        insert into "user" ("id", "name", "email", "emailVerified", "role", "createdAt", "updatedAt")
-        values ('admin-carolina', 'Carolina Riveros', 'carolina@breakpointcreativa.com', true, 'admin', now(), now())
-        on conflict ("email") do update set "role" = 'admin'
-      `);
-      await pg.query(`
-        insert into "account" ("id", "accountId", "providerId", "userId", "password", "createdAt", "updatedAt")
-        values ('acc-carolina', 'carolina@breakpointcreativa.com', 'credential', 'admin-carolina', $1, now(), now())
-        on conflict ("id") do update set "password" = $1
-      `, [defaultPasswordHash]);
-
-      await pg.query(`
-        insert into "user" ("id", "name", "email", "emailVerified", "role", "createdAt", "updatedAt")
-        values ('admin-gustavo', 'Gustavo Rojas', 'gustavo@breakpointcreativa.com', true, 'admin', now(), now())
-        on conflict ("email") do update set "role" = 'admin'
-      `);
-      await pg.query(`
-        insert into "account" ("id", "accountId", "providerId", "userId", "password", "createdAt", "updatedAt")
-        values ('acc-gustavo', 'gustavo@breakpointcreativa.com', 'credential', 'admin-gustavo', $1, now(), now())
-        on conflict ("id") do update set "password" = $1
-      `, [defaultPasswordHash]);
-    } catch {
-      /* ignore seeding errors */
-    }
+    await seedDefaultAdmins((text, params) => pg.query(text, params as unknown[]));
   };
   const pass = (globalRef.__pgliteMigrateChain__ ?? Promise.resolve())
     .catch(() => undefined) // an earlier failed pass must not wedge the chain

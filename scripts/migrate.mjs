@@ -74,6 +74,37 @@ async function main() {
       count += 1;
     }
     console.log(count ? `[migrate] done — ${count} migration(s) applied.` : "[migrate] up to date.");
+
+    // Seed default admin accounts if auth tables exist
+    try {
+      const { hashPassword } = await import("@better-auth/utils/password");
+      const defaultPasswordHash = await hashPassword("PasswordSegura2026!");
+
+      await client.query(`
+        insert into "user" ("id", "name", "email", "emailVerified", "role", "createdAt", "updatedAt")
+        values ('admin-carolina', 'Carolina Riveros', 'carolina@breakpointcreativa.com', true, 'admin', now(), now())
+        on conflict ("email") do update set "role" = 'admin'
+      `);
+      await client.query(`
+        insert into "account" ("id", "accountId", "providerId", "userId", "password", "createdAt", "updatedAt")
+        values ('acc-carolina', 'carolina@breakpointcreativa.com', 'credential', 'admin-carolina', $1, now(), now())
+        on conflict ("id") do update set "password" = $1
+      `, [defaultPasswordHash]);
+
+      await client.query(`
+        insert into "user" ("id", "name", "email", "emailVerified", "role", "createdAt", "updatedAt")
+        values ('admin-gustavo', 'Gustavo Rojas', 'gustavo@breakpointcreativa.com', true, 'admin', now(), now())
+        on conflict ("email") do update set "role" = 'admin'
+      `);
+      await client.query(`
+        insert into "account" ("id", "accountId", "providerId", "userId", "password", "createdAt", "updatedAt")
+        values ('acc-gustavo', 'gustavo@breakpointcreativa.com', 'credential', 'admin-gustavo', $1, now(), now())
+        on conflict ("id") do update set "password" = $1
+      `, [defaultPasswordHash]);
+      console.log("[migrate] default admin accounts ready.");
+    } catch (e) {
+      console.warn("[migrate] could not seed admin accounts:", e?.message);
+    }
   } finally {
     client.release();
     await pool.end();
