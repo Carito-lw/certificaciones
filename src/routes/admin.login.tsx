@@ -51,7 +51,8 @@ function AdminLoginPage() {
       });
 
       if (response.error) {
-        setErrorMsg("Usuario o contraseña incorrectos.");
+        console.error("Login error:", response.error);
+        setErrorMsg(response.error.message || "Usuario o contraseña incorrectos.");
         setLoading(false);
         return;
       }
@@ -59,8 +60,10 @@ function AdminLoginPage() {
       // Redirigir tras login exitoso
       const target = search.redirect || "/admin/certificados";
       void navigate({ to: target, replace: true });
-    } catch {
-      setErrorMsg("Usuario o contraseña incorrectos.");
+    } catch (err: unknown) {
+      console.error("Unexpected login error:", err);
+      const msg = err instanceof Error ? err.message : "Usuario o contraseña incorrectos.";
+      setErrorMsg(msg);
     } finally {
       setLoading(false);
     }

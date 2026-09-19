@@ -1,26 +1,56 @@
 import { auth } from "../../src/lib/auth/server";
-
-interface NitroAuthEvent {
-  url: URL;
-  req: { method: string; headers: Headers; [key: string]: unknown };
-}
+import { readRawBody, getRequestURL, getRequestHeaders, getMethod } from "h3";
 
 export default async function authMiddleware(
-  event: NitroAuthEvent,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  event: any,
   next: () => unknown | Promise<unknown>,
 ): Promise<unknown> {
-  const path = event.url.pathname;
-  if (!path.startsWith("/api/auth")) {
+  const url = getRequestURL(event);
+  if (!url.pathname.startsWith("/api/auth")) {
     return next();
   }
 
-  const method = (event.req.method ?? "GET").toUpperCase();
-  const rawHeaders = event.req.headers;
+  const method = getMethod(event, "GET").toUpperCase();
+  const rawHeaders = getRequestHeaders(event);
+  const headers = new Headers();
+  for (const [key, value] of Object.entries(rawHeaders)) {
+    if (value !== undefined) {
+      if (Array.isArray(value)) {
+        for (const v of value) headers.append(key, v);
+      } else {
+        headers.set(key, String(value));
+      }
+    }
+  }
 
-  const request = new Request(event.url.toString(), {
+  let bodyBuffer: Buffer | undefined;
+  if (method !== "GET" && method !== "HEAD") {
+    try {
+      const raw = await readRawBody(event, false);
+      if (raw) {
+        bodyBuffer = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
+      }
+    } catch {
+      const req = event.node?.req || event.req;
+      if (req && typeof req[Symbol.asyncIterator] === "function") {
+        const chunks: Buffer[] = [];
+        for await (const chunk of req) {
+          chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+        }
+        bodyBuffer = Buffer.concat(chunks);
+      }
+    }
+  }
+
+  const request = new Request(url.href, {
     method,
-    headers: rawHeaders,
+    headers,
+    body: bodyBuffer,
+    // @ts-expect-error Node duplex
+    duplex: bodyBuffer ? "half" : undefined,
   });
 
   return auth.handler(request);
 }
+
