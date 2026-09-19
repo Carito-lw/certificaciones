@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { auth } from "../../src/lib/auth/server";
 import { readRawBody, getRequestURL, getRequestHeaders, getMethod } from "h3";
 
