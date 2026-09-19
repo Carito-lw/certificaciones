@@ -47,6 +47,37 @@ export function validateCertificateQrMatch(code: string, qrSvg: string): boolean
   return false;
 }
 
+export function formatCourseTitleHtml(course: string): string {
+  const clean = course.trim();
+  if (/python con an[aá]lisis de datos y vibe coding/i.test(clean)) {
+    return "PYTHON CON ANÁLISIS<br />DE DATOS Y VIBE CODING";
+  }
+  if (/producci[oó]n y validaci[oó]n de contenidos/i.test(clean)) {
+    return "PRODUCCIÓN Y VALIDACIÓN<br />DE CONTENIDOS";
+  }
+  return clean.toUpperCase();
+}
+
+export function formatIssueDateSpanish(dateStr?: string | null): string {
+  if (!dateStr) return "18 de septiembre de 2026";
+  try {
+    const parts = dateStr.split("-");
+    if (parts.length === 3) {
+      const year = parts[0];
+      const monthNum = parseInt(parts[1], 10);
+      const day = parseInt(parts[2], 10);
+      const months = [
+        "enero", "febrero", "marzo", "abril", "mayo", "junio",
+        "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"
+      ];
+      if (monthNum >= 1 && monthNum <= 12) {
+        return `${day} de ${months[monthNum - 1]} de ${year}`;
+      }
+    }
+  } catch {}
+  return dateStr;
+}
+
 export function renderCertificateHtml(
   data: CertificateData,
   options: {
@@ -74,14 +105,20 @@ export function renderCertificateHtml(
 
   // DNI formateado
   const dniText = data.dni ? `DNI ${data.dni}` : "";
+  const courseTitleHtml = formatCourseTitleHtml(data.courseName);
+  const formattedDate = formatIssueDateSpanish(data.issueDate);
+  const formattedPeriod = (data.period || "").replace("–", "y").replace("-", "y");
 
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
   <title>Certificado ${cleanCode} — ${fullName}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,700&family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@500;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@500;700&display=swap');
 
     @page {
       size: 297mm 210mm;
@@ -100,7 +137,7 @@ export function renderCertificateHtml(
       overflow: hidden;
       background-color: #FEFEFB;
       color: #161310;
-      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: 'Plus Jakarta Sans', Arial, sans-serif;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
@@ -120,19 +157,21 @@ export function renderCertificateHtml(
     .cert-code-container {
       position: absolute;
       top: 13.5mm;
-      right: 22.2mm;
-      width: 38mm;
-      text-align: center;
+      right: 18.5mm;
+      width: 60mm;
+      text-align: right;
       z-index: 10;
+      white-space: nowrap;
     }
 
     .cert-code-text {
-      font-family: 'Plus Jakarta Sans', sans-serif;
-      font-size: 3.1mm;
+      font-family: 'Plus Jakarta Sans', Arial, sans-serif;
+      font-size: 3.05mm;
       font-weight: 700;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.03em;
       color: #161310;
       line-height: 1;
+      white-space: nowrap;
     }
 
     /* Cuerpo Principal del Certificado */
@@ -140,7 +179,7 @@ export function renderCertificateHtml(
       position: absolute;
       left: 17.2mm;
       top: 50.5mm;
-      width: 145mm;
+      width: 152mm;
       z-index: 10;
     }
 
@@ -154,11 +193,13 @@ export function renderCertificateHtml(
     }
 
     .cert-student-name {
-      font-size: 9.8mm;
+      font-family: 'Plus Jakarta Sans', Arial, sans-serif;
+      font-size: 9.3mm;
       font-weight: 800;
       color: #0f0e0c;
-      letter-spacing: -0.025em;
-      line-height: 1.05;
+      letter-spacing: 0px !important;
+      word-spacing: 1.5px !important;
+      line-height: 1.08;
       margin-bottom: 3.6mm;
     }
 
@@ -193,14 +234,17 @@ export function renderCertificateHtml(
     }
 
     .cert-course-title {
-      font-size: 7.7mm;
+      font-family: 'Plus Jakarta Sans', Arial, sans-serif;
+      font-size: 6.8mm;
       font-weight: 800;
       color: #0f0e0c;
-      letter-spacing: -0.015em;
-      line-height: 1.12;
+      letter-spacing: 0px !important;
+      word-spacing: 1.5px !important;
+      line-height: 1.18;
       text-transform: uppercase;
       margin-bottom: 4.6mm;
-      max-width: 138mm;
+      max-width: 150mm;
+      word-break: normal;
     }
 
     .cert-duration-period {
@@ -265,15 +309,15 @@ export function renderCertificateHtml(
 
       <p class="cert-completion-intro">ha completado satisfactoriamente la capacitación</p>
       
-      <h2 class="cert-course-title">${data.courseName}</h2>
+      <h2 class="cert-course-title">${courseTitleHtml}</h2>
 
       <p class="cert-duration-period">
         con una duración total de ${data.hours} horas,<br />
-        realizada entre ${data.period}.
+        realizada entre ${formattedPeriod}.
       </p>
 
       <p class="cert-location-date">
-        Mendoza, Argentina · ${data.issueDate}
+        Mendoza, Argentina · ${formattedDate}
       </p>
     </div>
 
