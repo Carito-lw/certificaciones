@@ -10,7 +10,10 @@ import {
   formatArgentinaDate,
 } from "@/lib/certificates";
 import { triggerBase64Download } from "@/lib/certificates/client-download";
-import { handleCertificateDownloadResult } from "@/lib/certificates/client-pdf";
+import {
+  handleCertificateDownloadResult,
+  openCertificatePrintDialog,
+} from "@/lib/certificates/client-pdf";
 import { StatusBadge } from "./admin.certificados.index";
 
 export const Route = createFileRoute("/admin/certificados/$codigo")({
@@ -60,6 +63,25 @@ function AdminCertificateDetailPage() {
     } catch (err: any) {
       console.error("Error descargando PDF:", err);
       alert(`Error al generar el certificado PDF: ${err?.message || "Intente nuevamente"}`);
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
+  const handlePrintCertificate = async () => {
+    setIsGeneratingPdf(true);
+    try {
+      const res = await downloadCertificatePdfServerFn({
+        data: { code: certificate.code },
+      });
+      if (res.html) {
+        openCertificatePrintDialog(res.html);
+      } else {
+        await handleCertificateDownloadResult(res);
+      }
+    } catch (err: any) {
+      console.error("Error abriendo diálogo de impresión:", err);
+      alert(`Error al abrir vista de impresión: ${err?.message || "Intente nuevamente"}`);
     } finally {
       setIsGeneratingPdf(false);
     }
@@ -171,6 +193,17 @@ function AdminCertificateDetailPage() {
                 <span>DESCARGAR CERTIFICADO PDF</span>
               </>
             )}
+          </button>
+
+          <button
+            type="button"
+            disabled={isGeneratingPdf || isProcessing}
+            onClick={handlePrintCertificate}
+            className="flex items-center gap-1.5 border border-border bg-surface px-4 py-2.5 font-mono text-xs text-fg hover:border-primary hover:text-primary transition-colors disabled:opacity-50"
+            title="Abrir ventana nativa de impresión para guardar como PDF 100% vectorial"
+          >
+            <span>🖨</span>
+            <span>IMPRIMIR / VECTOR</span>
           </button>
 
           {certificate.status === "revoked" ? (
@@ -312,7 +345,7 @@ function AdminCertificateDetailPage() {
               <span>DNI ASOCIADO: <strong className="text-fg">{certificate.dni || "Pendiente"}</strong></span>
             </div>
           </div>
-          <div>
+          <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
               disabled={isGeneratingPdf || isProcessing}
@@ -330,6 +363,16 @@ function AdminCertificateDetailPage() {
                   <span>DESCARGAR CERTIFICADO PDF</span>
                 </>
               )}
+            </button>
+            <button
+              type="button"
+              disabled={isGeneratingPdf || isProcessing}
+              onClick={handlePrintCertificate}
+              className="w-full md:w-auto flex items-center justify-center gap-1.5 border border-border bg-surface px-5 py-3 font-mono text-xs text-fg hover:border-primary hover:text-primary transition-colors disabled:opacity-50"
+              title="Abrir ventana nativa de impresión para guardar como PDF 100% vectorial"
+            >
+              <span>🖨</span>
+              <span>IMPRIMIR / VISTA VECTOR</span>
             </button>
           </div>
         </div>

@@ -20,40 +20,58 @@ export function triggerBlobDownload(blob: Blob, filename: string) {
 
 /**
  * Renderiza el HTML programático de un certificado a un Blob PDF A4 horizontal (297 mm × 210 mm)
- * con calidad de alta resolución (scale: 2 ~ 300 DPI).
+ * con calidad de alta resolución (300 DPI) usando un iframe aislado para ajuste perfecto sin bordes.
  */
 export async function renderHtmlToPdfBlob(htmlContent: string): Promise<Blob> {
-  const container = document.createElement("div");
-  container.style.position = "fixed";
-  container.style.left = "-9999px";
-  container.style.top = "0";
-  container.style.width = "1491px"; // 297 mm @ ~127dpi
-  container.style.height = "1055px"; // 210 mm @ ~127dpi
-  container.style.overflow = "hidden";
-  container.style.zIndex = "-1000";
-  container.innerHTML = htmlContent;
-  document.body.appendChild(container);
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "fixed";
+  iframe.style.left = "-99999px";
+  iframe.style.top = "0";
+  iframe.style.width = "297mm";
+  iframe.style.height = "210mm";
+  iframe.style.border = "none";
+  iframe.style.margin = "0";
+  iframe.style.padding = "0";
+  iframe.style.overflow = "hidden";
+  document.body.appendChild(iframe);
 
   try {
-    if (document.fonts) {
-      await document.fonts.ready;
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) throw new Error("No se pudo inicializar el entorno de renderizado.");
+
+    doc.open();
+    doc.write(htmlContent);
+    doc.close();
+
+    // Esperar a que carguen fuentes e imágenes
+    if (doc.fonts) {
+      await doc.fonts.ready;
     }
-    await new Promise((r) => setTimeout(r, 200));
+    await new Promise((r) => setTimeout(r, 450));
 
-    const target = container.querySelector(".certificate-container") || container;
+    const target = (doc.querySelector(".certificate-container") as HTMLElement) || doc.body;
 
-    const canvas = await html2canvas(target as HTMLElement, {
-      scale: 2,
+    const rect = target.getBoundingClientRect();
+    const targetWidth = Math.round(rect.width) || target.offsetWidth || 1123;
+    const targetHeight = Math.round(rect.height) || target.offsetHeight || 794;
+
+    const canvas = await html2canvas(target, {
+      scale: 3, // Ultra alta resolución ~300 DPI
       useCORS: true,
       allowTaint: true,
       logging: false,
-      width: 1491,
-      height: 1055,
-      windowWidth: 1491,
-      windowHeight: 1055,
+      backgroundColor: "#FEFEFB",
+      width: targetWidth,
+      height: targetHeight,
+      windowWidth: targetWidth,
+      windowHeight: targetHeight,
+      x: 0,
+      y: 0,
+      scrollX: 0,
+      scrollY: 0,
     });
 
-    const imgData = canvas.toDataURL("image/jpeg", 0.95);
+    const imgData = canvas.toDataURL("image/jpeg", 0.98);
     const pdf = new jsPDF({
       orientation: "landscape",
       unit: "mm",
@@ -61,12 +79,29 @@ export async function renderHtmlToPdfBlob(htmlContent: string): Promise<Blob> {
       compress: true,
     });
 
-    pdf.addImage(imgData, "JPEG", 0, 0, 297, 210);
+    // Ajuste milimétrico exacto 297mm x 210mm (0 márgenes)
+    pdf.addImage(imgData, "JPEG", 0, 0, 297, 210, undefined, "FAST");
     return pdf.output("blob");
   } finally {
-    document.body.removeChild(container);
+    document.body.removeChild(iframe);
   }
 }
+
+/**
+ * Abre el diálogo nativo de impresión para guardar como PDF 100% vectorial
+ */
+export function openCertificatePrintDialog(htmlContent: string) {
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) return;
+  printWindow.document.open();
+  printWindow.document.write(htmlContent);
+  printWindow.document.close();
+  printWindow.focus();
+  setTimeout(() => {
+    printWindow.print();
+  }, 500);
+}
+
 
 /**
  * Procesa el resultado de descarga de un certificado individual.
