@@ -8,18 +8,27 @@ import {
 } from "./template.ts";
 import { createZipArchive, type ZipEntry } from "./zip.ts";
 
-let cachedBgBase64: string | null = null;
+import { TEMPLATE_BG_BASE64 } from "./template-bg-base64.ts";
 
 export function getCertificateTemplateBgDataUri(): string {
-  if (!cachedBgBase64) {
-    const bgPath = resolve("public/certificate-assets/certificate-template-bg.png");
-    if (!existsSync(bgPath)) {
-      throw new Error(`No se encontró la imagen de fondo del certificado en: ${bgPath}`);
-    }
-    cachedBgBase64 = readFileSync(bgPath).toString("base64");
+  if (TEMPLATE_BG_BASE64) {
+    return `data:image/png;base64,${TEMPLATE_BG_BASE64}`;
   }
-  return `data:image/png;base64,${cachedBgBase64}`;
+  const bgPath = resolve("public/certificate-assets/certificate-template-bg.png");
+  if (existsSync(bgPath)) {
+    return `data:image/png;base64,${readFileSync(bgPath).toString("base64")}`;
+  }
+  return "";
 }
+
+export function renderCompleteCertificateHtml(data: CertificateData): { html: string; filename: string } {
+  const bgImageDataUri = getCertificateTemplateBgDataUri();
+  const qrSvg = generateCertificateQrSvg(data.certificateCode);
+  const html = renderCertificateHtml(data, { bgImageDataUri, qrSvg });
+  const filename = getCertificatePdfFilename(data);
+  return { html, filename };
+}
+
 
 export function slugifyParticipantName(name: string): string {
   return name

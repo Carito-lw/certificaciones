@@ -12,6 +12,10 @@ import {
   type AdminCertificate,
 } from "@/lib/certificates";
 import { triggerBase64Download } from "@/lib/certificates/client-download";
+import {
+  handleCertificateDownloadResult,
+  handleBatchZipDownloadResult,
+} from "@/lib/certificates/client-pdf";
 
 export const Route = createFileRoute("/admin/certificados/")({
   loader: () => getAdminCertificates(),
@@ -82,7 +86,7 @@ function AdminCertificatesPage() {
       const res = await downloadCertificatePdfServerFn({
         data: { code },
       });
-      triggerBase64Download(res.base64, res.filename, "application/pdf");
+      await handleCertificateDownloadResult(res);
     } catch (err: any) {
       console.error("Error al descargar PDF:", err);
       alert(`Error al generar el certificado PDF: ${err?.message || "Intente nuevamente."}`);
@@ -99,7 +103,7 @@ function AdminCertificatesPage() {
       const res = await downloadBatchCertificatesZipServerFn({
         data: { codes: codesToDownload },
       });
-      triggerBase64Download(res.base64, res.filename, "application/zip");
+      await handleBatchZipDownloadResult(res);
     } catch (err: any) {
       console.error("Error generando lote ZIP:", err);
       alert(`Error al generar lote de certificados ZIP: ${err?.message || "Intente nuevamente."}`);

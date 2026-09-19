@@ -826,14 +826,29 @@ async function getCertificateForPdf(code: string) {
   };
 }
 
+export type CertificateDownloadResult = {
+  base64?: string;
+  html?: string;
+  filename: string;
+  fallbackToClient?: boolean;
+};
+
+export type BatchCertificatesDownloadResult = {
+  base64?: string;
+  filename: string;
+  count: number;
+  fallbackToClient?: boolean;
+  items?: Array<{ html: string; filename: string }>;
+};
+
 /**
- * Generar y descargar el certificado individual en PDF (Base64) con verificación admin.
+ * Generar y descargar el certificado individual en PDF con verificación admin.
  */
 export const downloadCertificatePdfServerFn = createServerFn({ method: "POST" })
   .validator((input: { code: string }) => ({
     code: normalizeCertificateCode(input.code),
   }))
-  .handler(async ({ data }): Promise<{ base64: string; filename: string }> => {
+  .handler(async ({ data }): Promise<CertificateDownloadResult> => {
     const { requireAdminSession } = await import("./auth/verify.server");
     await requireAdminSession();
 
@@ -842,23 +857,35 @@ export const downloadCertificatePdfServerFn = createServerFn({ method: "POST" })
       throw new Error(`Certificado ${data.code} no encontrado.`);
     }
 
-    const { generateSingleCertificatePdf } = await import("./certificates/pdf-generator.server");
-    const { buffer, filename } = await generateSingleCertificatePdf(cert);
+    const { generateSingleCertificatePdf, renderCompleteCertificateHtml } = await import(
+      "./certificates/pdf-generator.server"
+    );
 
-    return {
-      base64: buffer.toString("base64"),
-      filename,
-    };
+    try {
+      const { buffer, filename } = await generateSingleCertificatePdf(cert);
+      return {
+        base64: buffer.toString("base64"),
+        filename,
+      };
+    } catch (browserError) {
+      console.warn("Playwright no disponible en este entorno, usando fallback cliente:", browserError);
+      const { html, filename } = renderCompleteCertificateHtml(cert);
+      return {
+        html,
+        filename,
+        fallbackToClient: true,
+      };
+    }
   });
 
 /**
- * Generar y descargar un lote de certificados en un archivo ZIP (Base64) con verificación admin.
+ * Generar y descargar un lote de certificados en un archivo ZIP con verificación admin.
  */
 export const downloadBatchCertificatesZipServerFn = createServerFn({ method: "POST" })
   .validator((input: { codes: string[] }) => ({
     codes: input.codes.map(normalizeCertificateCode),
   }))
-  .handler(async ({ data }): Promise<{ base64: string; filename: string; count: number }> => {
+  .handler(async ({ data }): Promise<BatchCertificatesDownloadResult> => {
     const { requireAdminSession } = await import("./auth/verify.server");
     await requireAdminSession();
 
@@ -878,14 +905,28 @@ export const downloadBatchCertificatesZipServerFn = createServerFn({ method: "PO
       throw new Error("No se encontraron certificados válidos para generar.");
     }
 
-    const { generateCertificatesZip } = await import("./certificates/pdf-generator.server");
-    const { buffer, filename } = await generateCertificatesZip(certList);
+    const { generateCertificatesZip, renderCompleteCertificateHtml } = await import(
+      "./certificates/pdf-generator.server"
+    );
 
-    return {
-      base64: buffer.toString("base64"),
-      filename,
-      count: certList.length,
-    };
+    try {
+      const { buffer, filename } = await generateCertificatesZip(certList);
+      return {
+        base64: buffer.toString("base64"),
+        filename,
+        count: certList.length,
+      };
+    } catch (browserError) {
+      console.warn("Playwright no disponible en este entorno, usando fallback cliente:", browserError);
+      const items = certList.map((c) => renderCompleteCertificateHtml(c));
+      const dateStr = new Date().toISOString().slice(0, 10);
+      return {
+        filename: `Certificados_Breakpoint_${dateStr}.zip`,
+        count: certList.length,
+        fallbackToClient: true,
+        items,
+      };
+    }
   });
 
 

@@ -11,3 +11,6 @@
   status = 200
   force = false
 
+[functions]
+  included_files = ["public/**"]
+

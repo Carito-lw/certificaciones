@@ -10,6 +10,7 @@ import {
   formatArgentinaDate,
 } from "@/lib/certificates";
 import { triggerBase64Download } from "@/lib/certificates/client-download";
+import { handleCertificateDownloadResult } from "@/lib/certificates/client-pdf";
 import { StatusBadge } from "./admin.certificados.index";
 
 export const Route = createFileRoute("/admin/certificados/$codigo")({
@@ -55,7 +56,7 @@ function AdminCertificateDetailPage() {
       const res = await downloadCertificatePdfServerFn({
         data: { code: certificate.code },
       });
-      triggerBase64Download(res.base64, res.filename, "application/pdf");
+      await handleCertificateDownloadResult(res);
     } catch (err: any) {
       console.error("Error descargando PDF:", err);
       alert(`Error al generar el certificado PDF: ${err?.message || "Intente nuevamente"}`);
