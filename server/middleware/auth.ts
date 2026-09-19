@@ -47,7 +47,7 @@ export default async function authMiddleware(
   const request = new Request(url.href, {
     method,
     headers,
-    body: bodyBuffer,
+    body: bodyBuffer ? (new Uint8Array(bodyBuffer) as unknown as BodyInit) : undefined,
     // @ts-expect-error Node duplex
     duplex: bodyBuffer ? "half" : undefined,
   });

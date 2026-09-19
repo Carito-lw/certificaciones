@@ -126,10 +126,10 @@ export const INITIAL_CERTIFICATES: Record<string, AdminCertificate> = {
     participantName: "Ana Maria Medina",
     courseName: "Python con Análisis de Datos y Vibe Coding",
     hours: 64,
-    period: "Abril – Julio 2026",
+    period: "abril – julio 2026",
     status: "issued",
-    dni: null,
-    issuedAt: "2026-07-30",
+    dni: "32.855.417",
+    issuedAt: "2026-09-18",
     firstVerifiedAt: null,
     lastVerifiedAt: null,
     verificationCount: 0,
@@ -143,10 +143,10 @@ export const INITIAL_CERTIFICATES: Record<string, AdminCertificate> = {
     participantName: "Mauricio Bottone",
     courseName: "Python con Análisis de Datos y Vibe Coding",
     hours: 64,
-    period: "Abril – Julio 2026",
+    period: "abril – julio 2026",
     status: "issued",
-    dni: null,
-    issuedAt: "2026-07-30",
+    dni: "21.809.918",
+    issuedAt: "2026-09-18",
     firstVerifiedAt: null,
     lastVerifiedAt: null,
     verificationCount: 0,
@@ -160,10 +160,10 @@ export const INITIAL_CERTIFICATES: Record<string, AdminCertificate> = {
     participantName: "Luz Ceneri",
     courseName: "Python con Análisis de Datos y Vibe Coding",
     hours: 64,
-    period: "Abril – Julio 2026",
+    period: "abril – julio 2026",
     status: "issued",
-    dni: null,
-    issuedAt: "2026-07-30",
+    dni: "42.009.891",
+    issuedAt: "2026-09-18",
     firstVerifiedAt: null,
     lastVerifiedAt: null,
     verificationCount: 0,
@@ -177,10 +177,10 @@ export const INITIAL_CERTIFICATES: Record<string, AdminCertificate> = {
     participantName: "Octavio Naim",
     courseName: "Python con Análisis de Datos y Vibe Coding",
     hours: 64,
-    period: "Abril – Julio 2026",
+    period: "abril – julio 2026",
     status: "issued",
-    dni: null,
-    issuedAt: "2026-07-30",
+    dni: "49.082.369",
+    issuedAt: "2026-09-18",
     firstVerifiedAt: null,
     lastVerifiedAt: null,
     verificationCount: 0,
@@ -194,10 +194,10 @@ export const INITIAL_CERTIFICATES: Record<string, AdminCertificate> = {
     participantName: "German Sosa",
     courseName: "Python con Análisis de Datos y Vibe Coding",
     hours: 64,
-    period: "Abril – Julio 2026",
+    period: "abril – julio 2026",
     status: "issued",
-    dni: null,
-    issuedAt: "2026-07-30",
+    dni: "48.724.809",
+    issuedAt: "2026-09-18",
     firstVerifiedAt: null,
     lastVerifiedAt: null,
     verificationCount: 0,
@@ -211,10 +211,10 @@ export const INITIAL_CERTIFICATES: Record<string, AdminCertificate> = {
     participantName: "Milagros Orihuela",
     courseName: "Python con Análisis de Datos y Vibe Coding",
     hours: 64,
-    period: "Abril – Julio 2026",
+    period: "abril – julio 2026",
     status: "issued",
-    dni: null,
-    issuedAt: "2026-07-30",
+    dni: "43.354.169",
+    issuedAt: "2026-09-18",
     firstVerifiedAt: null,
     lastVerifiedAt: null,
     verificationCount: 0,
@@ -228,10 +228,10 @@ export const INITIAL_CERTIFICATES: Record<string, AdminCertificate> = {
     participantName: "Ezequiel Aguero",
     courseName: "Python con Análisis de Datos y Vibe Coding",
     hours: 64,
-    period: "Abril – Julio 2026",
+    period: "abril – julio 2026",
     status: "issued",
-    dni: null,
-    issuedAt: "2026-07-30",
+    dni: "28.917.414",
+    issuedAt: "2026-09-18",
     firstVerifiedAt: null,
     lastVerifiedAt: null,
     verificationCount: 0,
@@ -245,7 +245,7 @@ export const INITIAL_CERTIFICATES: Record<string, AdminCertificate> = {
     participantName: "Alejandro Morales",
     courseName: "Python con Análisis de Datos y Vibe Coding",
     hours: 64,
-    period: "Abril – Julio 2026",
+    period: "abril – julio 2026",
     status: "issued",
     dni: "29.996.320",
     issuedAt: "2026-09-18",
@@ -773,5 +773,120 @@ export const updateCertificateDni = createServerFn({ method: "POST" })
 
     return { success: true, dni: data.dni };
   });
+
+/**
+ * Obtener datos estructurados de un certificado para la generación de PDF.
+ */
+async function getCertificateForPdf(code: string) {
+  try {
+    const { getSql } = await import("./db");
+    const sql = await getSql();
+
+    const rows = await sql<{
+      code: string;
+      participant_name: string;
+      course_name: string;
+      hours: number;
+      period: string;
+      dni: string | null;
+      issued_at: string | null;
+    }>`
+      select code, participant_name, course_name, hours, period, dni, issued_at
+      from certificates
+      where code = ${code}
+      limit 1
+    `;
+
+    if (rows[0]) {
+      return {
+        certificateCode: rows[0].code,
+        participantName: rows[0].participant_name,
+        courseName: rows[0].course_name,
+        hours: rows[0].hours,
+        period: rows[0].period,
+        dni: rows[0].dni ?? null,
+        issueDate: rows[0].issued_at,
+      };
+    }
+  } catch (err) {
+    console.warn("DB not available for PDF data, using fallback memory:", err);
+  }
+
+  const fallback = INITIAL_CERTIFICATES[code];
+  if (!fallback) return null;
+
+  return {
+    certificateCode: fallback.code,
+    participantName: fallback.participantName,
+    courseName: fallback.courseName,
+    hours: fallback.hours,
+    period: fallback.period,
+    dni: fallback.dni ?? null,
+    issueDate: fallback.issuedAt,
+  };
+}
+
+/**
+ * Generar y descargar el certificado individual en PDF (Base64) con verificación admin.
+ */
+export const downloadCertificatePdfServerFn = createServerFn({ method: "POST" })
+  .validator((input: { code: string }) => ({
+    code: normalizeCertificateCode(input.code),
+  }))
+  .handler(async ({ data }): Promise<{ base64: string; filename: string }> => {
+    const { requireAdminSession } = await import("./auth/verify.server");
+    await requireAdminSession();
+
+    const cert = await getCertificateForPdf(data.code);
+    if (!cert) {
+      throw new Error(`Certificado ${data.code} no encontrado.`);
+    }
+
+    const { generateSingleCertificatePdf } = await import("./certificates/pdf-generator.server");
+    const { buffer, filename } = await generateSingleCertificatePdf(cert);
+
+    return {
+      base64: buffer.toString("base64"),
+      filename,
+    };
+  });
+
+/**
+ * Generar y descargar un lote de certificados en un archivo ZIP (Base64) con verificación admin.
+ */
+export const downloadBatchCertificatesZipServerFn = createServerFn({ method: "POST" })
+  .validator((input: { codes: string[] }) => ({
+    codes: input.codes.map(normalizeCertificateCode),
+  }))
+  .handler(async ({ data }): Promise<{ base64: string; filename: string; count: number }> => {
+    const { requireAdminSession } = await import("./auth/verify.server");
+    await requireAdminSession();
+
+    if (!data.codes.length) {
+      throw new Error("No se seleccionó ningún certificado para generar.");
+    }
+
+    const certList = [];
+    for (const code of data.codes) {
+      const cert = await getCertificateForPdf(code);
+      if (cert) {
+        certList.push(cert);
+      }
+    }
+
+    if (!certList.length) {
+      throw new Error("No se encontraron certificados válidos para generar.");
+    }
+
+    const { generateCertificatesZip } = await import("./certificates/pdf-generator.server");
+    const { buffer, filename } = await generateCertificatesZip(certList);
+
+    return {
+      base64: buffer.toString("base64"),
+      filename,
+      count: certList.length,
+    };
+  });
+
 
 

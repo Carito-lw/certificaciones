@@ -5,9 +5,11 @@ import {
   revokeCertificate,
   reactivateCertificate,
   updateCertificateDni,
+  downloadCertificatePdfServerFn,
   formatArgentinaDateTime,
   formatArgentinaDate,
 } from "@/lib/certificates";
+import { triggerBase64Download } from "@/lib/certificates/client-download";
 import { StatusBadge } from "./admin.certificados.index";
 
 export const Route = createFileRoute("/admin/certificados/$codigo")({
@@ -21,6 +23,7 @@ function AdminCertificateDetailPage() {
   const [isRevokeModalOpen, setIsRevokeModalOpen] = useState(false);
   const [revokeReason, setRevokeReason] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   // Estado para edición interactiva del DNI
   const [isEditingDni, setIsEditingDni] = useState(false);
@@ -45,6 +48,21 @@ function AdminCertificateDetailPage() {
   }
 
   const { certificate, verifications } = data;
+
+  const handleDownloadPdf = async () => {
+    setIsGeneratingPdf(true);
+    try {
+      const res = await downloadCertificatePdfServerFn({
+        data: { code: certificate.code },
+      });
+      triggerBase64Download(res.base64, res.filename, "application/pdf");
+    } catch (err: any) {
+      console.error("Error descargando PDF:", err);
+      alert(`Error al generar el certificado PDF: ${err?.message || "Intente nuevamente"}`);
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
 
   const handleRevoke = async () => {
     setIsProcessing(true);
@@ -134,10 +152,29 @@ function AdminCertificateDetailPage() {
         </div>
 
         {/* Botones de acción */}
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            disabled={isGeneratingPdf || isProcessing}
+            onClick={handleDownloadPdf}
+            className="flex items-center gap-2 bg-primary px-5 py-2.5 font-mono text-xs font-semibold text-bg hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-50"
+          >
+            {isGeneratingPdf ? (
+              <>
+                <span className="inline-block animate-spin">⟳</span>
+                <span>GENERANDO PDF...</span>
+              </>
+            ) : (
+              <>
+                <span>↓</span>
+                <span>DESCARGAR CERTIFICADO PDF</span>
+              </>
+            )}
+          </button>
+
           {certificate.status === "revoked" ? (
             <button
-              disabled={isProcessing}
+              disabled={isProcessing || isGeneratingPdf}
               onClick={handleReactivate}
               className="bg-emerald-500/20 border border-emerald-500/40 px-5 py-2.5 font-mono text-xs font-medium text-emerald-400 hover:bg-emerald-500/30 transition-colors"
             >
@@ -145,7 +182,7 @@ function AdminCertificateDetailPage() {
             </button>
           ) : (
             <button
-              disabled={isProcessing}
+              disabled={isProcessing || isGeneratingPdf}
               onClick={() => {
                 setIsRevokeModalOpen(true);
                 setRevokeReason("");
@@ -257,6 +294,44 @@ function AdminCertificateDetailPage() {
           value={`${certificate.verificationCount} escaneos`}
           mono
         />
+      </div>
+
+      {/* Documento Oficial y Certificación PDF */}
+      <div className="mt-10 border border-border bg-surface p-6">
+        <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-1">
+            <p className="font-mono text-xs tracking-label text-primary">// EMISIÓN Y FORMATO DE IMPRESIÓN</p>
+            <h3 className="font-display text-2xl italic">Certificado Oficial Breakpoint Creativa (A4 Horizontal)</h3>
+            <p className="text-xs text-muted max-w-xl">
+              Plantilla programática en alta resolución (297 mm × 210 mm) con QR dinámico trazable,
+              firmas vectoriales de Carolina Riveros y Gustavo Rojas, y tipografías editoriales.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-4 font-mono text-micro text-muted">
+              <span>QR DIRECTO: <strong className="text-fg">https://breakpointcreativa.com/verificar/{certificate.code}</strong></span>
+              <span>DNI ASOCIADO: <strong className="text-fg">{certificate.dni || "Pendiente"}</strong></span>
+            </div>
+          </div>
+          <div>
+            <button
+              type="button"
+              disabled={isGeneratingPdf || isProcessing}
+              onClick={handleDownloadPdf}
+              className="w-full md:w-auto flex items-center justify-center gap-2 bg-primary px-6 py-3 font-mono text-xs font-semibold text-bg hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-50"
+            >
+              {isGeneratingPdf ? (
+                <>
+                  <span className="inline-block animate-spin">⟳</span>
+                  <span>GENERANDO PDF...</span>
+                </>
+              ) : (
+                <>
+                  <span>↓</span>
+                  <span>DESCARGAR CERTIFICADO PDF</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Historial de Verificaciones */}

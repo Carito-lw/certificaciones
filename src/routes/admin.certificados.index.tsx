@@ -5,10 +5,13 @@ import {
   revokeCertificate,
   reactivateCertificate,
   updateCertificateDni,
+  downloadCertificatePdfServerFn,
+  downloadBatchCertificatesZipServerFn,
   formatArgentinaDateTime,
   type CertificateStatus,
   type AdminCertificate,
 } from "@/lib/certificates";
+import { triggerBase64Download } from "@/lib/certificates/client-download";
 
 export const Route = createFileRoute("/admin/certificados/")({
   loader: () => getAdminCertificates(),
@@ -23,6 +26,11 @@ function AdminCertificatesPage() {
   const [revokingCode, setRevokingCode] = useState<string | null>(null);
   const [revokeReason, setRevokeReason] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Estados para selección múltiple y descargas PDF / ZIP
+  const [selectedCodes, setSelectedCodes] = useState<string[]>([]);
+  const [isGeneratingZip, setIsGeneratingZip] = useState(false);
+  const [generatingSingleCode, setGeneratingSingleCode] = useState<string | null>(null);
 
   // Estado para modal rápido de edición de DNI
   const [editingDniCert, setEditingDniCert] = useState<{ code: string; name: string; dni: string } | null>(null);
@@ -47,6 +55,58 @@ function AdminCertificatesPage() {
     }
     return true;
   });
+
+  const filteredCodes = filtered.map((c) => c.code);
+  const allFilteredSelected =
+    filteredCodes.length > 0 && filteredCodes.every((code) => selectedCodes.includes(code));
+  const someFilteredSelected =
+    filteredCodes.some((code) => selectedCodes.includes(code)) && !allFilteredSelected;
+
+  const handleToggleSelectAll = () => {
+    if (allFilteredSelected) {
+      setSelectedCodes((prev) => prev.filter((code) => !filteredCodes.includes(code)));
+    } else {
+      setSelectedCodes((prev) => Array.from(new Set([...prev, ...filteredCodes])));
+    }
+  };
+
+  const handleToggleSelect = (code: string) => {
+    setSelectedCodes((prev) =>
+      prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code],
+    );
+  };
+
+  const handleDownloadSinglePdf = async (code: string) => {
+    setGeneratingSingleCode(code);
+    try {
+      const res = await downloadCertificatePdfServerFn({
+        data: { code },
+      });
+      triggerBase64Download(res.base64, res.filename, "application/pdf");
+    } catch (err: any) {
+      console.error("Error al descargar PDF:", err);
+      alert(`Error al generar el certificado PDF: ${err?.message || "Intente nuevamente."}`);
+    } finally {
+      setGeneratingSingleCode(null);
+    }
+  };
+
+  const handleBatchZipDownload = async (customCodes?: string[]) => {
+    const codesToDownload = customCodes || selectedCodes;
+    if (!codesToDownload.length) return;
+    setIsGeneratingZip(true);
+    try {
+      const res = await downloadBatchCertificatesZipServerFn({
+        data: { codes: codesToDownload },
+      });
+      triggerBase64Download(res.base64, res.filename, "application/zip");
+    } catch (err: any) {
+      console.error("Error generando lote ZIP:", err);
+      alert(`Error al generar lote de certificados ZIP: ${err?.message || "Intente nuevamente."}`);
+    } finally {
+      setIsGeneratingZip(false);
+    }
+  };
 
   const handleRevokeSubmit = async () => {
     if (!revokingCode) return;
@@ -106,13 +166,39 @@ function AdminCertificatesPage() {
   return (
     <div className="mx-auto max-w-7xl px-5 py-12 md:px-8">
       {/* Encabezado */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between border-b border-border pb-8">
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between border-b border-border pb-8">
         <div>
           <p className="font-mono text-xs tracking-label text-primary">// PANEL ADMINISTRATIVO</p>
           <h1 className="mt-2 font-display text-4xl italic md:text-5xl">Gestión de Certificados</h1>
           <p className="mt-2 text-sm text-muted">
-            Trazabilidad, estados en tiempo real, carga de DNI e historial de consultas.
+            Trazabilidad, estados en tiempo real, carga de DNI y emisión automática en PDF.
           </p>
+        </div>
+
+        {/* Botón de acción masiva en cabecera */}
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            disabled={isGeneratingZip || filtered.length === 0}
+            onClick={() => handleBatchZipDownload(selectedCodes.length ? selectedCodes : filteredCodes)}
+            className="flex items-center gap-2 bg-primary px-5 py-2.5 font-mono text-xs font-semibold text-bg hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-50"
+          >
+            {isGeneratingZip ? (
+              <>
+                <span className="inline-block animate-spin">⟳</span>
+                <span>GENERANDO ZIP...</span>
+              </>
+            ) : (
+              <>
+                <span>↓</span>
+                <span>
+                  {selectedCodes.length > 0
+                    ? `GENERAR CERTIFICADOS (${selectedCodes.length} en ZIP)`
+                    : `GENERAR TODOS (${filtered.length} en ZIP)`}
+                </span>
+              </>
+            )}
+          </button>
         </div>
       </div>
 
@@ -174,11 +260,67 @@ function AdminCertificatesPage() {
         </div>
       </div>
 
+      {/* Barra de Acciones Masivas (visible cuando hay elementos seleccionados) */}
+      {selectedCodes.length > 0 && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-4 border border-primary/40 bg-primary/10 px-5 py-3">
+          <div className="flex items-center gap-3">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary font-mono text-micro font-bold text-bg">
+              {selectedCodes.length}
+            </span>
+            <span className="font-mono text-xs text-fg">
+              {selectedCodes.length === 1
+                ? "1 certificado seleccionado"
+                : `${selectedCodes.length} certificados seleccionados`}
+            </span>
+            <button
+              type="button"
+              onClick={() => setSelectedCodes([])}
+              className="font-mono text-micro text-muted hover:text-fg underline ml-2"
+            >
+              Deseleccionar todos
+            </button>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              disabled={isGeneratingZip}
+              onClick={() => handleBatchZipDownload()}
+              className="flex items-center gap-2 bg-primary px-4 py-2 font-mono text-xs font-semibold text-bg hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-50"
+            >
+              {isGeneratingZip ? (
+                <>
+                  <span className="inline-block animate-spin">⟳</span>
+                  <span>GENERANDO ZIP...</span>
+                </>
+              ) : (
+                <>
+                  <span>↓</span>
+                  <span>DESCARGAR SELECCIONADOS ({selectedCodes.length} en ZIP)</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Tabla de Certificados */}
       <div className="mt-6 overflow-x-auto border border-border bg-surface">
         <table className="w-full border-collapse text-left">
           <thead>
             <tr className="border-b border-border bg-bg/50 font-mono text-micro tracking-label text-muted">
+              <th className="w-12 px-4 py-3.5 text-center">
+                <input
+                  type="checkbox"
+                  aria-label="Seleccionar todos los certificados visibles"
+                  checked={allFilteredSelected}
+                  ref={(el) => {
+                    if (el) el.indeterminate = someFilteredSelected;
+                  }}
+                  onChange={handleToggleSelectAll}
+                  className="h-4 w-4 rounded border-border accent-primary cursor-pointer"
+                />
+              </th>
               <th className="px-5 py-3.5">CÓDIGO</th>
               <th className="px-5 py-3.5">ALUMNO</th>
               <th className="px-5 py-3.5">DNI</th>
@@ -193,110 +335,136 @@ function AdminCertificatesPage() {
           <tbody className="divide-y divide-border text-xs">
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-5 py-12 text-center font-mono text-muted">
+                <td colSpan={10} className="px-5 py-12 text-center font-mono text-muted">
                   No se encontraron certificados con los filtros aplicados.
                 </td>
               </tr>
             ) : (
-              filtered.map((cert) => (
-                <tr key={cert.code} className="hover:bg-bg/40 transition-colors">
-                  <td className="px-5 py-4 font-mono font-medium">
-                    <Link
-                      to="/admin/certificados/$codigo"
-                      params={{ codigo: cert.code }}
-                      className="text-primary hover:underline"
-                    >
-                      {cert.code}
-                    </Link>
-                  </td>
-                  <td className="px-5 py-4">
-                    <div className="font-medium text-fg">{cert.participantName}</div>
-                  </td>
-                  <td className="px-5 py-4">
-                    {cert.dni ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingDniCert({ code: cert.code, name: cert.participantName, dni: cert.dni || "" });
-                          setDniInputValue(cert.dni || "");
-                        }}
-                        className="font-mono text-xs text-primary/90 hover:text-primary hover:underline"
-                        title="Click para editar DNI"
-                      >
-                        {cert.dni}
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingDniCert({ code: cert.code, name: cert.participantName, dni: "" });
-                          setDniInputValue("");
-                        }}
-                        className="font-mono text-micro text-subtle hover:text-primary hover:underline"
-                      >
-                        + Cargar DNI
-                      </button>
-                    )}
-                  </td>
-                  <td className="px-5 py-4 max-w-[200px] truncate text-muted" title={cert.courseName}>
-                    {cert.courseName}
-                  </td>
-                  <td className="px-5 py-4">
-                    <StatusBadge status={cert.status} />
-                  </td>
-                  <td className="px-5 py-4 font-mono text-micro text-muted">
-                    {formatArgentinaDateTime(cert.firstVerifiedAt)}
-                  </td>
-                  <td className="px-5 py-4 font-mono text-micro text-muted">
-                    {formatArgentinaDateTime(cert.lastVerifiedAt)}
-                  </td>
-                  <td className="px-5 py-4 text-center font-mono font-medium">
-                    <span className="inline-block px-2 py-0.5 bg-bg border border-border text-fg rounded">
-                      {cert.verificationCount}
-                    </span>
-                  </td>
-                  <td className="px-5 py-4 text-right">
-                    <div className="flex items-center justify-end gap-3 font-mono text-micro">
+              filtered.map((cert) => {
+                const isSelected = selectedCodes.includes(cert.code);
+                return (
+                  <tr
+                    key={cert.code}
+                    className={`transition-colors ${
+                      isSelected ? "bg-primary/5 hover:bg-primary/10" : "hover:bg-bg/40"
+                    }`}
+                  >
+                    <td className="w-12 px-4 py-4 text-center">
+                      <input
+                        type="checkbox"
+                        aria-label={`Seleccionar certificado ${cert.code}`}
+                        checked={isSelected}
+                        onChange={() => handleToggleSelect(cert.code)}
+                        className="h-4 w-4 rounded border-border accent-primary cursor-pointer"
+                      />
+                    </td>
+                    <td className="px-5 py-4 font-mono font-medium">
                       <Link
                         to="/admin/certificados/$codigo"
                         params={{ codigo: cert.code }}
-                        className="text-muted hover:text-fg hover:underline"
+                        className="text-primary hover:underline"
                       >
-                        DETALLE
+                        {cert.code}
                       </Link>
-                      <a
-                        href={`/verificar/${cert.code}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-subtle hover:text-muted"
-                        title="Abrir vista pública"
-                      >
-                        ↗
-                      </a>
-                      {cert.status === "revoked" ? (
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="font-medium text-fg">{cert.participantName}</div>
+                    </td>
+                    <td className="px-5 py-4">
+                      {cert.dni ? (
                         <button
-                          disabled={isProcessing}
-                          onClick={() => handleReactivate(cert.code)}
-                          className="text-emerald-400 hover:text-emerald-300 transition-colors"
+                          type="button"
+                          onClick={() => {
+                            setEditingDniCert({ code: cert.code, name: cert.participantName, dni: cert.dni || "" });
+                            setDniInputValue(cert.dni || "");
+                          }}
+                          className="font-mono text-xs text-primary/90 hover:text-primary hover:underline"
+                          title="Click para editar DNI"
                         >
-                          REACTIVAR
+                          {cert.dni}
                         </button>
                       ) : (
                         <button
-                          disabled={isProcessing}
+                          type="button"
                           onClick={() => {
-                            setRevokingCode(cert.code);
-                            setRevokeReason("");
+                            setEditingDniCert({ code: cert.code, name: cert.participantName, dni: "" });
+                            setDniInputValue("");
                           }}
-                          className="text-red-400/80 hover:text-red-400 transition-colors"
+                          className="font-mono text-micro text-subtle hover:text-primary hover:underline"
                         >
-                          REVOCAR
+                          + Cargar DNI
                         </button>
                       )}
-                    </div>
-                  </td>
-                </tr>
-              ))
+                    </td>
+                    <td className="px-5 py-4 max-w-[200px] truncate text-muted" title={cert.courseName}>
+                      {cert.courseName}
+                    </td>
+                    <td className="px-5 py-4">
+                      <StatusBadge status={cert.status} />
+                    </td>
+                    <td className="px-5 py-4 font-mono text-micro text-muted">
+                      {formatArgentinaDateTime(cert.firstVerifiedAt)}
+                    </td>
+                    <td className="px-5 py-4 font-mono text-micro text-muted">
+                      {formatArgentinaDateTime(cert.lastVerifiedAt)}
+                    </td>
+                    <td className="px-5 py-4 text-center font-mono font-medium">
+                      <span className="inline-block px-2 py-0.5 bg-bg border border-border text-fg rounded">
+                        {cert.verificationCount}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4 text-right">
+                      <div className="flex items-center justify-end gap-3 font-mono text-micro">
+                        <button
+                          type="button"
+                          disabled={generatingSingleCode === cert.code || isProcessing}
+                          onClick={() => handleDownloadSinglePdf(cert.code)}
+                          className="text-primary hover:text-primary/80 font-bold transition-colors disabled:opacity-50"
+                          title="Descargar PDF individual"
+                        >
+                          {generatingSingleCode === cert.code ? "PDF..." : "PDF"}
+                        </button>
+                        <Link
+                          to="/admin/certificados/$codigo"
+                          params={{ codigo: cert.code }}
+                          className="text-muted hover:text-fg hover:underline"
+                        >
+                          DETALLE
+                        </Link>
+                        <a
+                          href={`/verificar/${cert.code}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-subtle hover:text-muted"
+                          title="Abrir vista pública"
+                        >
+                          ↗
+                        </a>
+                        {cert.status === "revoked" ? (
+                          <button
+                            disabled={isProcessing}
+                            onClick={() => handleReactivate(cert.code)}
+                            className="text-emerald-400 hover:text-emerald-300 transition-colors"
+                          >
+                            REACTIVAR
+                          </button>
+                        ) : (
+                          <button
+                            disabled={isProcessing}
+                            onClick={() => {
+                              setRevokingCode(cert.code);
+                              setRevokeReason("");
+                            }}
+                            className="text-red-400/80 hover:text-red-400 transition-colors"
+                          >
+                            REVOCAR
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
