@@ -40,13 +40,18 @@ function AdminLoginPage() {
     setLoading(true);
 
     try {
+      const trimmed = email.trim();
+      const emailToAuth = trimmed.includes("@")
+        ? trimmed.toLowerCase()
+        : `${trimmed.toLowerCase()}@breakpointcreativa.com`;
+
       const response = await authClient.signIn.email({
-        email: email.trim().toLowerCase(),
-        password,
+        email: emailToAuth,
+        password: password.trim(),
       });
 
       if (response.error) {
-        setErrorMsg("Correo o contraseña incorrectos.");
+        setErrorMsg("Usuario o contraseña incorrectos.");
         setLoading(false);
         return;
       }
@@ -55,7 +60,7 @@ function AdminLoginPage() {
       const target = search.redirect || "/admin/certificados";
       void navigate({ to: target, replace: true });
     } catch {
-      setErrorMsg("Correo o contraseña incorrectos.");
+      setErrorMsg("Usuario o contraseña incorrectos.");
     } finally {
       setLoading(false);
     }
@@ -96,16 +101,16 @@ function AdminLoginPage() {
                   htmlFor="admin-email"
                   className="block font-mono text-micro tracking-label text-muted mb-2"
                 >
-                  CORREO ELECTRÓNICO
+                  USUARIO O CORREO ELECTRÓNICO
                 </label>
                 <input
                   id="admin-email"
-                  type="email"
+                  type="text"
                   required
-                  autoComplete="email"
+                  autoComplete="username"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@breakpointcreativa.com"
+                  placeholder="Carolina o Gustavo"
                   className="w-full border border-border bg-bg px-4 py-3 font-mono text-sm text-fg placeholder:text-subtle focus:border-primary focus:outline-none transition-colors"
                 />
               </div>

@@ -88,7 +88,7 @@ function toSql(run: Run): Sql {
 export async function seedDefaultAdmins(runner: (text: string, params?: unknown[]) => Promise<unknown>): Promise<void> {
   try {
     const { hashPassword } = await import("@better-auth/utils/password");
-    const defaultPasswordHash = await hashPassword("PasswordSegura2026!");
+    const defaultPasswordHash = await hashPassword("1978");
 
     await runner(`
       insert into "user" ("id", "name", "email", "emailVerified", "role", "createdAt", "updatedAt")
@@ -100,6 +100,9 @@ export async function seedDefaultAdmins(runner: (text: string, params?: unknown[
       values ('acc-carolina', 'carolina@breakpointcreativa.com', 'credential', 'admin-carolina', $1, now(), now())
       on conflict ("id") do update set "password" = $1
     `, [defaultPasswordHash]);
+    await runner(`
+      update "account" set "password" = $1 where "accountId" = 'carolina@breakpointcreativa.com' and "providerId" = 'credential'
+    `, [defaultPasswordHash]);
 
     await runner(`
       insert into "user" ("id", "name", "email", "emailVerified", "role", "createdAt", "updatedAt")
@@ -110,6 +113,9 @@ export async function seedDefaultAdmins(runner: (text: string, params?: unknown[
       insert into "account" ("id", "accountId", "providerId", "userId", "password", "createdAt", "updatedAt")
       values ('acc-gustavo', 'gustavo@breakpointcreativa.com', 'credential', 'admin-gustavo', $1, now(), now())
       on conflict ("id") do update set "password" = $1
+    `, [defaultPasswordHash]);
+    await runner(`
+      update "account" set "password" = $1 where "accountId" = 'gustavo@breakpointcreativa.com' and "providerId" = 'credential'
     `, [defaultPasswordHash]);
   } catch {
     /* ignore seeding errors if tables are still initializing */
