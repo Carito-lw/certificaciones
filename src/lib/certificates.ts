@@ -114,7 +114,7 @@ export function normalizeDbStatus(rawStatus: string, count: number): Certificate
   return "issued";
 }
 
-export * from "./certificates/qr";
+export * from "./certificates/qr.ts";
 
 /**
  * Estado en memoria para fallback local (desarrollo sin DB conectada).
@@ -929,5 +929,80 @@ export const downloadBatchCertificatesZipServerFn = createServerFn({ method: "PO
     }
   });
 
+export * from "./certificates/courses.ts";
+export * from "./certificates/excel-template.ts";
+export type {
+  ImportStudentPayload,
+  PreviewValidatedStudent,
+  ValidationSummaryResponse,
+  CertificateBatchRecord,
+} from "./certificates/batches.server.ts";
 
+/**
+ * Valida un lote de alumnos antes de importar y asigna códigos correlativos.
+ */
+export const validateImportBatchServerFn = createServerFn({ method: "POST" })
+  .validator(
+    (input: {
+      students: import("./certificates/batches.server.ts").ImportStudentPayload[];
+      defaultCourse?: {
+        name: string;
+        code?: string;
+        hours: number;
+        period: string;
+        issueDate: string;
+      };
+    }) => input,
+  )
+  .handler(async ({ data }) => {
+    const { requireAdminSession } = await import("./auth/verify.server.ts");
+    await requireAdminSession();
+
+    const { validateImportBatch } = await import("./certificates/batches.server.ts");
+    return validateImportBatch(data.students, data.defaultCourse);
+  });
+
+/**
+ * Confirma e inserta los certificados en la base de datos de forma atómica.
+ */
+export const confirmImportBatchServerFn = createServerFn({ method: "POST" })
+  .validator(
+    (input: {
+      items: import("./certificates/batches.server.ts").PreviewValidatedStudent[];
+      options?: { skipDuplicates?: boolean };
+    }) => input,
+  )
+  .handler(async ({ data }) => {
+    const { requireAdminSession } = await import("./auth/verify.server.ts");
+    const admin = await requireAdminSession();
+    const adminName = admin.name || "Administrador Breakpoint";
+
+    const { confirmImportBatch } = await import("./certificates/batches.server.ts");
+    return confirmImportBatch(adminName, data.items, data.options);
+  });
+
+/**
+ * Obtiene el historial de lotes de importación.
+ */
+export const getCertificateBatchesServerFn = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const { requireAdminSession } = await import("./auth/verify.server");
+    await requireAdminSession();
+
+    const { getCertificateBatches } = await import("./certificates/batches.server");
+    return getCertificateBatches();
+  });
+
+/**
+ * Obtiene los códigos de los certificados pertenecientes a un lote.
+ */
+export const getBatchCertificatesCodesServerFn = createServerFn({ method: "POST" })
+  .validator((input: { batchId: string }) => input)
+  .handler(async ({ data }) => {
+    const { requireAdminSession } = await import("./auth/verify.server");
+    await requireAdminSession();
+
+    const { getBatchCertificatesCodes } = await import("./certificates/batches.server");
+    return getBatchCertificatesCodes(data.batchId);
+  });
 

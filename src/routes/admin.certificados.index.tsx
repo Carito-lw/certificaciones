@@ -16,6 +16,8 @@ import {
   handleCertificateDownloadResult,
   handleBatchZipDownloadResult,
 } from "@/lib/certificates/client-pdf";
+import { ImportModal } from "@/components/admin/import-modal";
+import { BatchesModal } from "@/components/admin/batches-modal";
 
 export const Route = createFileRoute("/admin/certificados/")({
   loader: () => getAdminCertificates(),
@@ -30,6 +32,10 @@ function AdminCertificatesPage() {
   const [revokingCode, setRevokingCode] = useState<string | null>(null);
   const [revokeReason, setRevokeReason] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Modales de importación y lotes
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isBatchesModalOpen, setIsBatchesModalOpen] = useState(false);
 
   // Estados para selección múltiple y descargas PDF / ZIP
   const [selectedCodes, setSelectedCodes] = useState<string[]>([]);
@@ -179,13 +185,32 @@ function AdminCertificatesPage() {
           </p>
         </div>
 
-        {/* Botón de acción masiva en cabecera */}
-        <div className="flex items-center gap-3">
+        {/* Botones de acción masiva e importación en cabecera */}
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setIsBatchesModalOpen(true)}
+            className="flex items-center gap-2 border border-border bg-subtle/30 px-4 py-2.5 font-mono text-xs text-fg hover:bg-subtle/60 hover:border-primary/40 transition-colors shadow-sm"
+            title="Ver tandas anteriores y descargar lotes"
+          >
+            <span>📦</span>
+            <span>LOTES</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsImportModalOpen(true)}
+            className="flex items-center gap-2 bg-primary px-5 py-2.5 font-mono text-xs font-bold text-black hover:bg-primary/90 transition-colors shadow-sm"
+          >
+            <span>+</span>
+            <span>IMPORTAR ALUMNOS</span>
+          </button>
+
           <button
             type="button"
             disabled={isGeneratingZip || filtered.length === 0}
             onClick={() => handleBatchZipDownload(selectedCodes.length ? selectedCodes : filteredCodes)}
-            className="flex items-center gap-2 bg-primary px-5 py-2.5 font-mono text-xs font-semibold text-bg hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-50"
+            className="flex items-center gap-2 border border-primary/40 bg-primary/10 px-4 py-2.5 font-mono text-xs font-semibold text-primary hover:bg-primary/20 transition-colors shadow-sm disabled:opacity-50"
           >
             {isGeneratingZip ? (
               <>
@@ -197,8 +222,8 @@ function AdminCertificatesPage() {
                 <span>↓</span>
                 <span>
                   {selectedCodes.length > 0
-                    ? `GENERAR CERTIFICADOS (${selectedCodes.length} en ZIP)`
-                    : `GENERAR TODOS (${filtered.length} en ZIP)`}
+                    ? `DESCARGAR ZIP (${selectedCodes.length})`
+                    : `DESCARGAR TODOS (${filtered.length})`}
                 </span>
               </>
             )}
@@ -569,6 +594,22 @@ function AdminCertificatesPage() {
           </div>
         </div>
       )}
+
+      {/* Modal de Importación Masiva */}
+      <ImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onSuccess={async () => {
+          await router.invalidate();
+        }}
+      />
+
+      {/* Modal de Historial de Lotes */}
+      <BatchesModal
+        isOpen={isBatchesModalOpen}
+        onClose={() => setIsBatchesModalOpen(false)}
+        onOpenImport={() => setIsImportModalOpen(true)}
+      />
     </div>
   );
 }
