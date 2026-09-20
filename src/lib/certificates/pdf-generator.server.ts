@@ -2,10 +2,10 @@ import { chromium, type Browser } from "playwright";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import {
-  renderCertificateHtml,
-  generateCertificateQrSvg,
-  type CertificateData,
-} from "./template.ts";
+  renderIsolatedCertificateHtml,
+  generatePdfQrSvg,
+  type CertificatePdfData,
+} from "./pdf-template.ts";
 import { createZipArchive, type ZipEntry } from "./zip.ts";
 
 import { TEMPLATE_BG_BASE64 } from "./template-bg-base64.ts";
@@ -21,10 +21,10 @@ export function getCertificateTemplateBgDataUri(): string {
   return "";
 }
 
-export function renderCompleteCertificateHtml(data: CertificateData): { html: string; filename: string } {
+export function renderCompleteCertificateHtml(data: CertificatePdfData): { html: string; filename: string } {
   const bgImageDataUri = getCertificateTemplateBgDataUri();
-  const qrSvg = generateCertificateQrSvg(data.certificateCode);
-  const html = renderCertificateHtml(data, { bgImageDataUri, qrSvg });
+  const qrSvg = generatePdfQrSvg(data.certificateCode);
+  const html = renderIsolatedCertificateHtml(data, { bgImageDataUri, qrSvg });
   const filename = getCertificatePdfFilename(data);
   return { html, filename };
 }
@@ -39,7 +39,7 @@ export function slugifyParticipantName(name: string): string {
     .replace(/^_|_$/g, "");
 }
 
-export function getCertificatePdfFilename(data: CertificateData): string {
+export function getCertificatePdfFilename(data: CertificatePdfData): string {
   const code = data.certificateCode.trim().toUpperCase().replace(/\s+/g, "");
   const name = data.participantName
     ? data.participantName
@@ -64,13 +64,13 @@ async function launchBrowser(): Promise<Browser> {
  * Genera el PDF de un certificado individual a partir de sus datos dinámicos.
  */
 export async function generateSingleCertificatePdf(
-  data: CertificateData,
+  data: CertificatePdfData,
 ): Promise<{ buffer: Buffer; filename: string }> {
   const filename = getCertificatePdfFilename(data);
   const bgImageDataUri = getCertificateTemplateBgDataUri();
-  const qrSvg = generateCertificateQrSvg(data.certificateCode);
+  const qrSvg = generatePdfQrSvg(data.certificateCode);
 
-  const html = renderCertificateHtml(data, {
+  const html = renderIsolatedCertificateHtml(data, {
     bgImageDataUri,
     qrSvg,
   });
@@ -82,8 +82,7 @@ export async function generateSingleCertificatePdf(
       deviceScaleFactor: 2,
     });
 
-    await page.setContent(html, { waitUntil: "networkidle" });
-    await page.emulateMedia({ media: "screen" });
+    await page.setContent(html, { waitUntil: "load" });
     await page.evaluate(async () => {
       await document.fonts.ready;
     });
@@ -108,7 +107,7 @@ export async function generateSingleCertificatePdf(
  * Genera un archivo ZIP que contiene los PDFs individuales de una lista de certificados.
  */
 export async function generateCertificatesZip(
-  certificates: CertificateData[],
+  certificates: CertificatePdfData[],
   zipFilename = "Certificados_Breakpoint_Creativa.zip",
 ): Promise<{ buffer: Buffer; filename: string }> {
   if (certificates.length === 0) {
@@ -122,8 +121,8 @@ export async function generateCertificatesZip(
   try {
     for (const data of certificates) {
       const filename = getCertificatePdfFilename(data);
-      const qrSvg = generateCertificateQrSvg(data.certificateCode);
-      const html = renderCertificateHtml(data, {
+      const qrSvg = generatePdfQrSvg(data.certificateCode);
+      const html = renderIsolatedCertificateHtml(data, {
         bgImageDataUri,
         qrSvg,
       });
@@ -133,8 +132,7 @@ export async function generateCertificatesZip(
         deviceScaleFactor: 2,
       });
 
-      await page.setContent(html, { waitUntil: "networkidle" });
-      await page.emulateMedia({ media: "screen" });
+      await page.setContent(html, { waitUntil: "load" });
       await page.evaluate(async () => {
         await document.fonts.ready;
       });
