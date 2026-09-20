@@ -25,9 +25,9 @@ export function generateCertificateQrSvg(code: string): string {
   const matrix = encodeQrMatrix(url, "M");
   const rawSvg = renderSvg(matrix, {
     size: 256,
-    margin: 2,
+    margin: 0,
     darkColor: "#11100e",
-    lightColor: "#ffffff",
+    lightColor: "transparent",
   });
   // Inyectar atributo de trazabilidad y verificación en el tag raíz <svg>
   return rawSvg.replace(
@@ -370,25 +370,30 @@ export function renderCertificateHtml(
       }
     }
 
-    /* Sector Inferior Derecho: Código QR Real */
-    .cert-qr-wrapper {
+    /* Sector Inferior Derecho: Código QR Integrado */
+    .cert-qr-wrapper, .qr-wrapper {
       position: absolute;
       top: 161.4mm;
       right: 21.1mm;
       width: 19.8mm;
       height: 19.8mm;
-      background: #ffffff;
-      padding: 0.4mm;
+      background: transparent !important;
+      background-color: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      border-radius: 0 !important;
+      padding: 0 !important;
       display: flex;
       align-items: center;
       justify-content: center;
       z-index: 20;
     }
 
-    .cert-qr-wrapper svg {
+    .cert-qr-wrapper svg, .qr-wrapper svg {
       width: 100%;
       height: 100%;
       display: block;
+      background: transparent !important;
     }
   </style>
 </head>

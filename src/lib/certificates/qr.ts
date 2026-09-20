@@ -487,12 +487,16 @@ export function renderSvg(
     }
   }
 
+  const bgRect = lightColor && lightColor !== "transparent"
+    ? `  <rect width="100%" height="100%" fill="${lightColor}" />`
+    : "";
+
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${totalModules} ${totalModules}" width="${size}" height="${size}" shape-rendering="crispEdges">`,
-    `  <rect width="100%" height="100%" fill="${lightColor}" />`,
+    bgRect,
     `  <path d="${pathData.trim()}" fill="${darkColor}" />`,
     `</svg>`,
-  ].join("\n");
+  ].filter(Boolean).join("\n");
 }
 
 /**

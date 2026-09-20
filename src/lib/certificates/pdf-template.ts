@@ -20,9 +20,9 @@ export function generatePdfQrSvg(code: string): string {
   const matrix = encodeQrMatrix(url, "M");
   const rawSvg = renderSvg(matrix, {
     size: 256,
-    margin: 2,
+    margin: 0,
     darkColor: "#11100e",
-    lightColor: "#ffffff",
+    lightColor: "transparent",
   });
   return rawSvg.replace(
     "<svg ",
@@ -174,30 +174,18 @@ export function renderIsolatedCertificateHtml(
     .cert-body {
       position: absolute;
       left: 17.2mm;
-      top: 50.5mm;
+      top: 58mm;
       width: 152mm;
       z-index: 10;
       text-align: left;
     }
 
-    .cert-heading {
-      font-family: Arial, Helvetica, sans-serif;
-      font-size: 10pt;
-      font-weight: 700;
-      letter-spacing: 2px;
-      color: #2b2824;
-      text-transform: uppercase;
-      margin: 0 0 3.8mm 0;
-      text-align: left;
-      display: block;
-    }
-
     .student-name {
-      margin: 0 0 2.5mm 0;
+      margin: 0 0 3mm 0;
       padding: 0;
       display: block;
       font-family: Arial, Helvetica, sans-serif;
-      font-size: 30pt;
+      font-size: 28pt;
       font-weight: 700;
       line-height: 1.05;
       letter-spacing: 0;
@@ -210,19 +198,9 @@ export function renderIsolatedCertificateHtml(
     .dni-container {
       display: block;
       margin: 0 0 5.8mm 0;
-      padding: 0;
+      padding-left: 17.5mm; /* Alineado a la derecha de la barra naranja del fondo */
       text-align: left;
       line-height: 1;
-    }
-
-    .dni-bar {
-      display: inline-block;
-      vertical-align: middle;
-      width: 14.8mm;
-      height: 1.2mm;
-      background-color: #ff5500;
-      border-radius: 0.3mm;
-      margin-right: 2.8mm;
     }
 
     .dni-text {
@@ -307,22 +285,27 @@ export function renderIsolatedCertificateHtml(
       white-space: normal;
     }
 
-    /* QR Code */
-    .cert-qr-wrapper {
+    /* QR Code Integrado sobre fondo */
+    .cert-qr-wrapper, .qr-wrapper {
       position: absolute;
       top: 161.4mm;
       right: 21.1mm;
       width: 19.8mm;
       height: 19.8mm;
-      background: #ffffff;
-      padding: 0.4mm;
+      background: transparent !important;
+      background-color: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      border-radius: 0 !important;
+      padding: 0 !important;
       z-index: 20;
     }
 
-    .cert-qr-wrapper svg {
+    .cert-qr-wrapper svg, .qr-wrapper svg {
       width: 100%;
       height: 100%;
       display: block;
+      background: transparent !important;
     }
   </style>
 </head>
@@ -331,18 +314,14 @@ export function renderIsolatedCertificateHtml(
     <div class="cert-code">${cleanCode}</div>
 
     <div class="cert-body">
-      <div class="cert-heading">CERTIFICAMOS QUE</div>
       <h1 class="student-name">${fullName}</h1>
 
       ${
         dniText
           ? `<div class="dni-container">
-               <span class="dni-bar"></span>
                <span class="dni-text">${dniText}</span>
              </div>`
-          : `<div class="dni-container">
-               <span class="dni-bar"></span>
-             </div>`
+          : ""
       }
 
       <p class="description">ha completado satisfactoriamente la capacitación</p>
