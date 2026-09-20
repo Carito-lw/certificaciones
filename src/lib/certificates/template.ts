@@ -50,10 +50,10 @@ export function validateCertificateQrMatch(code: string, qrSvg: string): boolean
 export function formatCourseTitleHtml(course: string): string {
   const clean = course.trim();
   if (/python con an[aá]lisis de datos y vibe coding/i.test(clean)) {
-    return `<div>PYTHON&nbsp;CON&nbsp;ANÁLISIS</div><div>DE&nbsp;DATOS&nbsp;Y&nbsp;VIBE&nbsp;CODING</div>`;
+    return `<div>PYTHON CON ANÁLISIS</div><div>DE DATOS Y VIBE CODING</div>`;
   }
   if (/producci[oó]n y validaci[oó]n de contenidos/i.test(clean)) {
-    return `<div>PRODUCCIÓN&nbsp;Y&nbsp;VALIDACIÓN</div><div>DE&nbsp;CONTENIDOS</div>`;
+    return `<div>PRODUCCIÓN Y VALIDACIÓN</div><div>DE CONTENIDOS</div>`;
   }
   return `<div>${clean.toUpperCase()}</div>`;
 }
@@ -87,12 +87,10 @@ export function renderCertificateHtml(
 ): string {
   const cleanCode = data.certificateCode.trim().toUpperCase().replace(/\s+/g, "");
   
-  // Construcción del nombre completo preservando espacios estrictamente
-  const rawFullName = data.participantName
+  // Construcción del nombre completo como un único nodo de texto sin arrays ni splits
+  const fullName = data.participantName
     ? data.participantName.trim()
     : [data.firstName, data.lastName].filter(Boolean).join(" ").trim();
-  
-  const fullName = rawFullName.split(/\s+/).filter(Boolean).join("&nbsp;");
 
   // QR SVG programático
   const qrSvg = options.qrSvg || generateCertificateQrSvg(cleanCode);
@@ -105,17 +103,23 @@ export function renderCertificateHtml(
     );
   }
 
-  // DNI formateado con espacio protegido
-  const dniText = data.dni ? `DNI&nbsp;${data.dni}` : "";
+  // DNI formateado
+  const dniText = data.dni ? `DNI ${data.dni}` : "";
   const courseTitleHtml = formatCourseTitleHtml(data.courseName);
   const formattedDate = formatIssueDateSpanish(data.issueDate);
-  const formattedPeriod = (data.period || "").replace("–", "y").replace("-", "y");
+  
+  let formattedPeriod = (data.period || "").trim();
+  if (/abril.*julio.*2026/i.test(formattedPeriod)) {
+    formattedPeriod = "abril y julio de 2026";
+  } else {
+    formattedPeriod = formattedPeriod.replace("–", "y").replace("-", "y");
+  }
 
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>Certificado ${cleanCode} — ${rawFullName}</title>
+  <title>Certificado ${cleanCode} — ${fullName}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
@@ -178,7 +182,7 @@ export function renderCertificateHtml(
     }
 
     /* Cuerpo Principal del Certificado */
-    .cert-body {
+    .cert-body, .certificate-content {
       position: absolute;
       left: 17.2mm;
       top: 50.5mm;
@@ -193,26 +197,51 @@ export function renderCertificateHtml(
       color: #2b2824;
       text-transform: uppercase;
       margin-bottom: 3.8mm;
+      text-align: left;
+    }
+
+    /* Reset total y forzado de tipografía y espaciado */
+    .certificate-name,
+    .certificate-course,
+    .certificate-description,
+    .certificate-duration,
+    .certificate-date,
+    .certificate-dni,
+    .cert-student-name,
+    .cert-course-title,
+    .cert-completion-intro,
+    .cert-duration-period,
+    .cert-location-date {
+      display: block !important;
+      text-align: left !important;
+      justify-content: initial !important;
+      align-items: initial !important;
+      word-spacing: 0 !important;
+      letter-spacing: normal !important;
+      white-space: normal !important;
+      font-stretch: normal !important;
+      transform: none !important;
     }
 
     /* Nombre del alumno */
     .certificate-name, .cert-student-name {
-      display: block;
-      white-space: normal;
-      word-spacing: normal;
-      letter-spacing: normal;
-      line-height: 1.05;
+      display: block !important;
       font-family: 'Plus Jakarta Sans', Arial, sans-serif;
       font-size: 9.3mm;
       font-weight: 800;
       color: #0f0e0c;
+      line-height: 1.05;
+      letter-spacing: normal !important;
+      word-spacing: 0 !important;
+      text-align: left !important;
       margin-bottom: 2.2mm; /* ~8px: Nombre -> DNI */
     }
 
     /* Fila de DNI */
-    .cert-dni-row {
-      display: flex;
-      align-items: center;
+    .certificate-dni, .cert-dni-row {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: flex-start !important;
       gap: 2.8mm;
       margin-bottom: 5.8mm; /* ~22px: DNI -> descripcion */
     }
@@ -223,33 +252,41 @@ export function renderCertificateHtml(
       height: 1.15mm;
       background-color: #ff5500;
       border-radius: 0.3mm;
+      flex-shrink: 0;
     }
 
     .cert-dni-text {
+      font-family: 'Plus Jakarta Sans', Arial, sans-serif;
       font-size: 3.55mm;
       font-weight: 600;
-      letter-spacing: normal;
-      word-spacing: normal;
+      letter-spacing: normal !important;
+      word-spacing: 0 !important;
       color: #1f1d19;
+      text-align: left !important;
     }
 
     /* Texto de introduccion */
-    .cert-completion-intro {
+    .certificate-description, .cert-completion-intro {
+      display: block !important;
+      font-family: 'Plus Jakarta Sans', Arial, sans-serif;
       font-size: 3.55mm;
       font-weight: 500;
       color: #2b2824;
+      line-height: 1.2;
       margin-bottom: 4.2mm; /* ~16px: Descripcion -> curso */
-      letter-spacing: normal;
-      word-spacing: normal;
+      letter-spacing: normal !important;
+      word-spacing: 0 !important;
+      text-align: left !important;
+      white-space: normal !important;
     }
 
     /* Titulo del curso en dos lineas controladas */
     .certificate-course, .cert-course-title {
-      display: block;
-      white-space: normal;
-      word-spacing: normal;
-      letter-spacing: normal;
-      line-height: 1.15;
+      display: block !important;
+      text-align: left !important;
+      line-height: 1.02;
+      letter-spacing: normal !important;
+      word-spacing: 0 !important;
       max-width: 100%;
       font-family: 'Plus Jakarta Sans', Arial, sans-serif;
       font-size: 6.8mm;
@@ -259,30 +296,78 @@ export function renderCertificateHtml(
       margin-bottom: 5.2mm; /* ~20px: Curso -> duracion */
     }
 
-    .certificate-course div, .cert-course-title div {
-      white-space: normal;
-      word-spacing: normal;
-      letter-spacing: normal;
+    .certificate-course > div, .cert-course-title > div {
+      display: block !important;
+      white-space: nowrap !important;
+      text-align: left !important;
+      letter-spacing: normal !important;
+      word-spacing: 0 !important;
     }
 
     /* Duracion y periodo */
-    .cert-duration-period {
+    .certificate-duration, .cert-duration-period {
+      display: block !important;
+      font-family: 'Plus Jakarta Sans', Arial, sans-serif;
       font-size: 3.45mm;
       font-weight: 500;
       line-height: 1.38;
       color: #2e2b26;
       margin-bottom: 7.2mm; /* ~27px: Duracion -> fecha */
-      letter-spacing: normal;
-      word-spacing: normal;
+      letter-spacing: normal !important;
+      word-spacing: 0 !important;
+      text-align: left !important;
+      white-space: normal !important;
     }
 
     /* Fecha y ubicacion */
-    .cert-location-date {
+    .certificate-date, .cert-location-date {
+      display: block !important;
+      font-family: 'Plus Jakarta Sans', Arial, sans-serif;
       font-size: 3.45mm;
       font-weight: 500;
       color: #2b2824;
-      letter-spacing: normal;
-      word-spacing: normal;
+      line-height: 1.2;
+      letter-spacing: normal !important;
+      word-spacing: 0 !important;
+      text-align: left !important;
+      white-space: normal !important;
+    }
+
+    @media print {
+      .certificate-name,
+      .certificate-course,
+      .certificate-description,
+      .certificate-duration,
+      .certificate-date,
+      .certificate-dni,
+      .cert-student-name,
+      .cert-course-title,
+      .cert-completion-intro,
+      .cert-duration-period,
+      .cert-location-date {
+        display: block !important;
+        text-align: left !important;
+        justify-content: initial !important;
+        align-items: initial !important;
+        word-spacing: 0 !important;
+        letter-spacing: normal !important;
+        white-space: normal !important;
+        font-stretch: normal !important;
+        transform: none !important;
+      }
+
+      .certificate-dni, .cert-dni-row {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
+      }
+
+      .certificate-course > div, .cert-course-title > div {
+        display: block !important;
+        white-space: nowrap !important;
+        text-align: left !important;
+        word-spacing: 0 !important;
+      }
     }
 
     /* Sector Inferior Derecho: Código QR Real */
@@ -315,33 +400,33 @@ export function renderCertificateHtml(
     </div>
 
     <!-- Cuerpo Principal (Sector Izquierdo) -->
-    <div class="cert-body">
+    <div class="cert-body certificate-content">
       <div class="cert-heading-certificamos">CERTIFICAMOS QUE</div>
       <h1 class="certificate-name cert-student-name">${fullName}</h1>
       
       ${
         dniText
-          ? `<div class="cert-dni-row">
+          ? `<div class="certificate-dni cert-dni-row">
                <span class="cert-orange-pill"></span>
                <span class="cert-dni-text">${dniText}</span>
              </div>`
-          : `<div class="cert-dni-row">
+          : `<div class="certificate-dni cert-dni-row">
                <span class="cert-orange-pill"></span>
              </div>`
       }
 
-      <p class="cert-completion-intro">ha completado satisfactoriamente la capacitación</p>
+      <p class="certificate-description cert-completion-intro">ha completado satisfactoriamente la capacitación</p>
       
       <div class="certificate-course cert-course-title">
         ${courseTitleHtml}
       </div>
 
-      <p class="cert-duration-period">
+      <p class="certificate-duration cert-duration-period">
         con una duración total de ${data.hours} horas,<br />
         realizada entre ${formattedPeriod}.
       </p>
 
-      <p class="cert-location-date">
+      <p class="certificate-date cert-location-date">
         Mendoza, Argentina · ${formattedDate}
       </p>
     </div>

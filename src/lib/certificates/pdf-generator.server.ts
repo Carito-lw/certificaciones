@@ -83,7 +83,7 @@ export async function generateSingleCertificatePdf(
     });
 
     await page.setContent(html, { waitUntil: "networkidle" });
-    await page.emulateMedia({ media: "print" });
+    await page.emulateMedia({ media: "screen" });
     await page.evaluate(async () => {
       await document.fonts.ready;
     });
@@ -134,7 +134,7 @@ export async function generateCertificatesZip(
       });
 
       await page.setContent(html, { waitUntil: "networkidle" });
-      await page.emulateMedia({ media: "print" });
+      await page.emulateMedia({ media: "screen" });
       await page.evaluate(async () => {
         await document.fonts.ready;
       });
