@@ -12,6 +12,7 @@
     "build": "node scripts/with-app-env.mjs vite build && npm run db:migrate",
     "build:product": "node product/run.mjs build",
     "db:migrate:product": "node product/migrate.mjs",
+    "test:product": "node --experimental-strip-types --test product/*.test.mjs",
     "institution:create": "node product/create-institution.mjs",
     "db:migrate": "node scripts/migrate.mjs",
     "build:dev": "node scripts/with-app-env.mjs vite build --mode development",

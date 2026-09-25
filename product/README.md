@@ -16,15 +16,20 @@ base de Breakpoint; el comando de build del sitio nuevo debe ser
 esquema SaaS en orden. Nunca se copia información de los certificados reales.
 
 El panel inicial está en `/producto`: login, instituciones del usuario,
-estadísticas básicas y cursos de cada institución. Las consultas requieren
-sesión y membresía en la institución. Para dar de alta la primera institución
+estadísticas básicas, capacitaciones y alumnos por institución. Las consultas
+requieren sesión y membresía en la institución. Propietarios y administradores
+pueden crear capacitaciones y cargar alumnos; los emisores pueden cargar alumnos;
+los lectores solo consultan. Cada alta valida la membresía y el rol en el
+servidor y registra un evento de auditoría. El listado muestra los últimos 100
+alumnos. Para dar de alta la primera institución
 en una base nueva, `npm run institution:create -- --slug=... --institution=...
 --prefix=... --email=... --name=...` utiliza la contraseña recibida mediante
 `SAAS_BOOTSTRAP_PASSWORD`. No pasar la contraseña como argumento ni guardar
 estas variables en el repositorio. Las credenciales existentes no se importan.
 
-Este panel todavía es de lectura. El alta de cursos y alumnos, la importación,
-la emisión, los PDF y las descargas siguen pendientes en el modo producto.
+La importación masiva, la búsqueda y edición, la asociación de alumnos con
+capacitaciones, la emisión, los PDF y las descargas siguen pendientes en el modo
+producto. No hay registro público ni datos iniciales de ejemplo.
 
 ## Decisiones del MVP
 
