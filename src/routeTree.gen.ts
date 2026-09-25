@@ -21,6 +21,7 @@ import { Route as VerificarIndexRouteImport } from './routes/verificar.index'
 import { Route as VerificarCodigoRouteImport } from './routes/verificar.$codigo'
 import { Route as AdminCertificadosIndexRouteImport } from './routes/admin.certificados.index'
 import { Route as AdminCertificadosCodigoRouteImport } from './routes/admin.certificados.$codigo'
+import { Route as ProductoVerificarPublicIdRouteImport } from './routes/producto.verificar.$publicId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -82,6 +83,12 @@ const AdminCertificadosCodigoRoute = AdminCertificadosCodigoRouteImport.update({
   path: '/certificados/$codigo',
   getParentRoute: () => AdminRoute,
 } as any)
+const ProductoVerificarPublicIdRoute =
+  ProductoVerificarPublicIdRouteImport.update({
+    id: '/producto/verificar/$publicId',
+    path: '/producto/verificar/$publicId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -95,6 +102,7 @@ export interface FileRoutesByFullPath {
   '/producto/': typeof ProductoIndexRoute
   '/verificar/': typeof VerificarIndexRoute
   '/admin/certificados/$codigo': typeof AdminCertificadosCodigoRoute
+  '/producto/verificar/$publicId': typeof ProductoVerificarPublicIdRoute
   '/admin/certificados/': typeof AdminCertificadosIndexRoute
 }
 export interface FileRoutesByTo {
@@ -107,6 +115,7 @@ export interface FileRoutesByTo {
   '/producto': typeof ProductoIndexRoute
   '/verificar': typeof VerificarIndexRoute
   '/admin/certificados/$codigo': typeof AdminCertificadosCodigoRoute
+  '/producto/verificar/$publicId': typeof ProductoVerificarPublicIdRoute
   '/admin/certificados': typeof AdminCertificadosIndexRoute
 }
 export interface FileRoutesById {
@@ -122,6 +131,7 @@ export interface FileRoutesById {
   '/producto/': typeof ProductoIndexRoute
   '/verificar/': typeof VerificarIndexRoute
   '/admin/certificados/$codigo': typeof AdminCertificadosCodigoRoute
+  '/producto/verificar/$publicId': typeof ProductoVerificarPublicIdRoute
   '/admin/certificados/': typeof AdminCertificadosIndexRoute
 }
 export interface FileRouteTypes {
@@ -138,6 +148,7 @@ export interface FileRouteTypes {
     | '/producto/'
     | '/verificar/'
     | '/admin/certificados/$codigo'
+    | '/producto/verificar/$publicId'
     | '/admin/certificados/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -150,6 +161,7 @@ export interface FileRouteTypes {
     | '/producto'
     | '/verificar'
     | '/admin/certificados/$codigo'
+    | '/producto/verificar/$publicId'
     | '/admin/certificados'
   id:
     | '__root__'
@@ -164,6 +176,7 @@ export interface FileRouteTypes {
     | '/producto/'
     | '/verificar/'
     | '/admin/certificados/$codigo'
+    | '/producto/verificar/$publicId'
     | '/admin/certificados/'
   fileRoutesById: FileRoutesById
 }
@@ -174,6 +187,7 @@ export interface RootRouteChildren {
   ProductoSlugRoute: typeof ProductoSlugRoute
   ProductoLoginRoute: typeof ProductoLoginRoute
   ProductoIndexRoute: typeof ProductoIndexRoute
+  ProductoVerificarPublicIdRoute: typeof ProductoVerificarPublicIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -262,6 +276,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminCertificadosCodigoRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/producto/verificar/$publicId': {
+      id: '/producto/verificar/$publicId'
+      path: '/producto/verificar/$publicId'
+      fullPath: '/producto/verificar/$publicId'
+      preLoaderRoute: typeof ProductoVerificarPublicIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -302,6 +323,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProductoSlugRoute: ProductoSlugRoute,
   ProductoLoginRoute: ProductoLoginRoute,
   ProductoIndexRoute: ProductoIndexRoute,
+  ProductoVerificarPublicIdRoute: ProductoVerificarPublicIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

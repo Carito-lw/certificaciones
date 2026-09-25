@@ -34,6 +34,8 @@ try {
       values ($1, $2, $3) returning id`, [slug, institution.trim(), prefix]);
     await client.query(`insert into memberships (institution_id, user_id, role)
       values ($1, $2, 'owner')`, [rows[0].id, userId]);
+    await client.query(`insert into certificate_templates (institution_id, name, version, configuration)
+      values ($1, 'Institucional', 1, '{}'::jsonb)`, [rows[0].id]);
     await client.query("commit");
     process.stdout.write(`Institución creada: ${slug}\n`);
   } catch (error) {

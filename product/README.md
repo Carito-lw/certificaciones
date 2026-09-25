@@ -36,8 +36,24 @@ Al confirmar, el servidor repite la validación y guarda alumnos e inscripciones
 en una sola sentencia; una segunda carga no duplica inscripciones. La carga
 de alumnos no emite certificados ni reserva códigos. El campo Documento es
 obligatorio en la importación, y debe conservarse como texto si tiene ceros
-iniciales. La búsqueda y edición, la emisión, los PDF y las descargas siguen
-pendientes en el modo producto. No hay registro público ni datos de ejemplo.
+iniciales. No hay registro público ni datos de ejemplo.
+
+La pestaña Credenciales permite aprobar expresamente a los alumnos pendientes
+de un curso y emitir hasta 1000 credenciales por lote. Una sola sentencia SQL
+reserva códigos correlativos y registra lote, filas, credenciales y auditoría;
+una restricción única impide una segunda credencial por inscripción. Cada QR
+conduce a `/producto/verificar/:publicId`, cuya página muestra el estado vigente
+o revocado, sin documento ni correo, y registra la visita. Propietarios y
+administradores pueden revocar con motivo obligatorio. Las descargas PDF
+individuales requieren pertenecer a la institución; para habilitarlas en un
+despliegue nuevo hay que definir `SAAS_PUBLIC_BASE_URL` con el origen HTTPS del
+producto, por ejemplo `https://credenciales.ejemplo.org`. El PDF usa una
+plantilla institucional básica y los datos congelados al emitir.
+
+La búsqueda, la edición, las plantillas visuales configurables, el almacenamiento
+privado de PDFs, los trabajos de generación en segundo plano y el ZIP masivo
+siguen pendientes. No usar esta implementación como piloto público hasta revisar
+políticas de acceso, disponibilidad y experiencia visual en un navegador real.
 
 ## Decisiones del MVP
 
@@ -102,7 +118,7 @@ probar aislamiento entre instituciones antes de dar acceso a clientes.
    un repositorio propio y una base nueva.
 2. Implementar registro de instituciones y alta administrativa controlada.
 3. Completar búsqueda y edición de cursos y alumnos con aislamiento probado.
-4. Integrar emisión y validación; probar la generación de 800 credenciales.
+4. Agregar selección de aptitud por alumno y plantillas visuales configurables.
 5. Incorporar PDF en segundo plano, ZIP, estadísticas y piloto con dos
    instituciones de prueba.
 

@@ -19,6 +19,7 @@ try {
     ["saas_auth_v1", "migrations/auth/0001_auth.sql"],
     ["saas_auth_role_v1", "product/0002_auth_role.sql"],
     ["saas_schema_v1", "product/schema.sql"],
+    ["saas_issuance_v1", "product/zz_issuance.sql"],
   ]) {
     const applied = await client.query("select 1 from _migrations where name = $1", [name]);
     if (applied.rowCount) continue;

@@ -3,19 +3,26 @@ import { createFileRoute, Link, redirect, useRouter } from "@tanstack/react-rout
 import { createCourseEnrollment, createInstitutionCourse, createInstitutionStudent, getInstitutionPanel, getProductSession } from "@/lib/product";
 import { confirmInstitutionImport, previewInstitutionImport, type ImportInput } from "@/lib/product-import";
 import { downloadStudentTemplate, parseStudentSheet } from "@/lib/product-spreadsheet";
+import { approveCourseStudents, getInstitutionIssuance, issueInstitutionBatch, revokeCredential } from "@/lib/product-issuance";
+import { downloadInstitutionPdf } from "@/lib/product-pdf";
+import { encodeQrMatrix, renderSvg } from "@/lib/certificates/qr";
 
 export const Route = createFileRoute("/producto/$slug")({
   loader: async ({ params }) => {
     if (!(await getProductSession())) throw redirect({ to: "/producto/login" });
-    return getInstitutionPanel({ data: { slug: params.slug } });
+    const [panel, issuance] = await Promise.all([
+      getInstitutionPanel({ data: { slug: params.slug } }),
+      getInstitutionIssuance({ data: { slug: params.slug } }),
+    ]);
+    return { ...panel, issuance };
   },
   component: InstitutionPanel,
 });
 
 function InstitutionPanel() {
-  const { institution, courses, students, enrollments } = Route.useLoaderData();
+  const { institution, courses, students, enrollments, issuance } = Route.useLoaderData();
   const router = useRouter();
-  const [tab, setTab] = useState<"courses" | "students">("courses");
+  const [tab, setTab] = useState<"courses" | "students" | "credentials">("courses");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [importRows, setImportRows] = useState<ImportInput["rows"]>([]);
@@ -24,6 +31,12 @@ function InstitutionPanel() {
   const [importResult, setImportResult] = useState("");
   const [importError, setImportError] = useState("");
   const [importBusy, setImportBusy] = useState(false);
+  const [issueCourseId, setIssueCourseId] = useState("");
+  const [issueTemplateId, setIssueTemplateId] = useState("");
+  const [issueMessage, setIssueMessage] = useState("");
+  const [issueError, setIssueError] = useState("");
+  const [issueBusy, setIssueBusy] = useState(false);
+  const [qr, setQr] = useState<{ id: string; source: string } | null>(null);
   const canManageCourses = institution.role === "owner" || institution.role === "admin";
   const canManageStudents = canManageCourses || institution.role === "issuer";
 
@@ -104,6 +117,54 @@ function InstitutionPanel() {
     finally { setImportBusy(false); }
   }
 
+  async function approveStudents() {
+    setIssueBusy(true); setIssueError(""); setIssueMessage("");
+    try {
+      const result = await approveCourseStudents({ data: { slug: institution.slug, courseId: issueCourseId } });
+      setIssueMessage(`${result.marked} alumnos marcados como aptos.`);
+      await router.invalidate();
+    } catch (cause) { setIssueError(cause instanceof Error ? cause.message : "No pudimos actualizar las inscripciones."); }
+    finally { setIssueBusy(false); }
+  }
+
+  async function emitCredentials() {
+    setIssueBusy(true); setIssueError(""); setIssueMessage("");
+    try {
+      const result = await issueInstitutionBatch({ data: { slug: institution.slug, courseId: issueCourseId, templateId: issueTemplateId } });
+      setIssueMessage(`${result.issued} credenciales emitidas. Lote: ${result.batch_id}.`);
+      await router.invalidate();
+    } catch (cause) { setIssueError(cause instanceof Error ? cause.message : "No pudimos emitir las credenciales."); }
+    finally { setIssueBusy(false); }
+  }
+
+  async function downloadPdf(credentialId: string) {
+    setIssueBusy(true); setIssueError("");
+    try {
+      const result = await downloadInstitutionPdf({ data: { slug: institution.slug, credentialId } });
+      const { triggerBase64Download } = await import("@/lib/certificates/client-download");
+      triggerBase64Download(result.base64, result.filename);
+    } catch (cause) { setIssueError(cause instanceof Error ? cause.message : "No pudimos descargar el PDF."); }
+    finally { setIssueBusy(false); }
+  }
+
+  async function revokeIssued(credentialId: string) {
+    const reason = window.prompt("Motivo de revocación (obligatorio):");
+    if (!reason?.trim()) return;
+    setIssueBusy(true); setIssueError("");
+    try {
+      await revokeCredential({ data: { slug: institution.slug, credentialId, reason } });
+      setIssueMessage("Credencial revocada. La página pública ya refleja su nuevo estado.");
+      await router.invalidate();
+    } catch (cause) { setIssueError(cause instanceof Error ? cause.message : "No pudimos revocar la credencial."); }
+    finally { setIssueBusy(false); }
+  }
+
+  function showQr(publicId: string) {
+    const url = `${window.location.origin}/producto/verificar/${publicId}`;
+    const svg = renderSvg(encodeQrMatrix(url), { size: 240, darkColor: "#161310", lightColor: "#ffffff" });
+    setQr({ id: publicId, source: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}` });
+  }
+
   const inputClass = "mt-1 w-full rounded-lg border border-border bg-bg px-3 py-2.5 text-fg";
   const labelClass = "block text-sm font-medium";
   return (
@@ -130,7 +191,7 @@ function InstitutionPanel() {
           ))}
         </div>
         <nav aria-label="Secciones de la institución" className="mt-12 flex gap-2 border-b border-border">
-          {([ ["courses", "Capacitaciones"], ["students", "Alumnos"] ] as const).map(([key, title]) => (
+          {([ ["courses", "Capacitaciones"], ["students", "Alumnos"], ["credentials", "Credenciales"] ] as const).map(([key, title]) => (
             <button key={key} type="button" onClick={() => { setTab(key); setError(""); }}
               aria-current={tab === key ? "page" : undefined}
               className={`border-b-2 px-4 py-3 text-sm font-semibold ${tab === key ? "border-primary text-fg" : "border-transparent text-muted hover:text-fg"}`}>{title}</button>
@@ -153,7 +214,7 @@ function InstitutionPanel() {
               <span className="text-xs uppercase text-muted">{course.status === "active" ? "Activa" : "Archivada"}</span>
             </div>)}
           </div> : <p className="mt-5 rounded-xl border border-border bg-surface p-6 text-muted">Todavía no hay capacitaciones cargadas.</p>}
-        </section> : <section aria-label="Alumnos">
+        </section> : tab === "students" ? <section aria-label="Alumnos">
           <h2 className="mt-8 text-2xl font-semibold">Alumnos</h2>
           {canManageStudents && <div className="mt-5 rounded-xl border border-border bg-surface p-6">
             <h3 className="text-lg font-semibold">Importar alumnos de Excel o CSV</h3>
@@ -218,6 +279,47 @@ function InstitutionPanel() {
             </div>)}
           </div> : <p className="mt-5 rounded-xl border border-border bg-surface p-6 text-muted">Todavía no hay alumnos cargados.</p>}
           {institution.studentCount > 100 && <p className="mt-4 text-sm text-muted">Mostrando los últimos 100 alumnos de {institution.studentCount}.</p>}
+        </section> : <section aria-label="Credenciales">
+          <h2 className="mt-8 text-2xl font-semibold">Emisión y credenciales</h2>
+          {canManageStudents && <div className="mt-5 rounded-xl border border-border bg-surface p-6">
+            <h3 className="text-lg font-semibold">Emitir credenciales</h3>
+            <p className="mt-2 text-sm text-muted">Primero aprobá a quienes completaron la capacitación. Emitir crea códigos y QR verificables; podés descargar el PDF de cada credencial.</p>
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <label className={labelClass}>Capacitación<select className={inputClass} value={issueCourseId} onChange={(event) => { setIssueCourseId(event.target.value); setIssueMessage(""); }}>
+                <option value="">Elegir capacitación</option>
+                {courses.filter((course) => course.status === "active").map((course) => <option key={course.id} value={course.id}>{course.name}</option>)}
+              </select></label>
+              <label className={labelClass}>Plantilla<select className={inputClass} value={issueTemplateId} onChange={(event) => setIssueTemplateId(event.target.value)}>
+                <option value="">Elegir plantilla</option>
+                {issuance.templates.map((template) => <option key={template.id} value={template.id}>{template.name} · versión {template.version}</option>)}
+              </select></label>
+            </div>
+            {issueCourseId && <p className="mt-4 text-sm text-muted">{issuance.courses.find((course) => course.id === issueCourseId)?.pending ?? 0} pendientes de aprobación · {issuance.courses.find((course) => course.id === issueCourseId)?.eligible ?? 0} aptos para emitir</p>}
+            {issueError && <p role="alert" className="mt-4 text-sm text-red-400">{issueError}</p>}
+            {issueMessage && <p role="status" className="mt-4 text-sm text-primary">{issueMessage}</p>}
+            <div className="mt-5 flex flex-wrap gap-3">
+              <button type="button" disabled={issueBusy || !issueCourseId || !(issuance.courses.find((course) => course.id === issueCourseId)?.pending)} onClick={() => void approveStudents()} className="rounded-lg border border-border px-5 py-3 font-semibold disabled:opacity-50">Marcar pendientes como aptos</button>
+              <button type="button" disabled={issueBusy || !issueCourseId || !issueTemplateId || !(issuance.courses.find((course) => course.id === issueCourseId)?.eligible)} onClick={() => void emitCredentials()} className="rounded-lg bg-primary px-5 py-3 font-semibold text-primary-fg disabled:opacity-50">{issueBusy ? "Procesando…" : "Emitir hasta 1000 credenciales"}</button>
+            </div>
+          </div>}
+          {issuance.credentials.length ? <div className="mt-5 overflow-hidden rounded-xl border border-border">
+            {issuance.credentials.map((credential) => <div key={credential.id} className="flex flex-wrap items-center justify-between gap-4 border-b border-border bg-surface p-5 last:border-0">
+              <div><p className="font-semibold">{credential.participant} · {credential.course}</p>
+                <p className="mt-1 text-sm text-muted">{credential.display_code} · {credential.status === "issued" ? "Vigente" : "Revocada"}</p></div>
+              <div className="flex flex-wrap gap-3 text-sm font-semibold">
+                <Link to="/producto/verificar/$publicId" params={{ publicId: credential.public_id }} target="_blank" className="text-primary hover:underline">Verificar</Link>
+                <button type="button" onClick={() => showQr(credential.public_id)} className="text-primary hover:underline">QR</button>
+                {credential.status === "issued" && <button type="button" disabled={issueBusy} onClick={() => void downloadPdf(credential.id)} className="text-primary hover:underline disabled:opacity-50">PDF</button>}
+                {canManageCourses && credential.status === "issued" && <button type="button" disabled={issueBusy} onClick={() => void revokeIssued(credential.id)} className="text-red-400 hover:underline disabled:opacity-50">Revocar</button>}
+              </div>
+            </div>)}
+          </div> : <p className="mt-5 rounded-xl border border-border bg-surface p-6 text-muted">Todavía no hay credenciales emitidas.</p>}
+          {institution.credentialCount > 50 && <p className="mt-4 text-sm text-muted">Mostrando las últimas 50 credenciales de {institution.credentialCount}.</p>}
+          {qr && <div className="mt-6 rounded-xl border border-border bg-surface p-6">
+            <div className="flex items-center justify-between gap-4"><h3 className="font-semibold">QR de verificación</h3><button type="button" onClick={() => setQr(null)} aria-label="Cerrar código QR" className="text-muted">Cerrar</button></div>
+            <img src={qr.source} width={240} height={240} alt="Código QR de verificación pública" className="mt-4 bg-white p-2" />
+            <Link to="/producto/verificar/$publicId" params={{ publicId: qr.id }} target="_blank" className="mt-3 block break-all text-sm text-primary hover:underline">Abrir página pública</Link>
+          </div>}
         </section>}
       </div>
     </main>
