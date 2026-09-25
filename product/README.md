@@ -27,9 +27,17 @@ en una base nueva, `npm run institution:create -- --slug=... --institution=...
 `SAAS_BOOTSTRAP_PASSWORD`. No pasar la contraseña como argumento ni guardar
 estas variables en el repositorio. Las credenciales existentes no se importan.
 
-La importación masiva, la búsqueda y edición, la asociación de alumnos con
-capacitaciones, la emisión, los PDF y las descargas siguen pendientes en el modo
-producto. No hay registro público ni datos iniciales de ejemplo.
+El panel permite asociar manualmente alumnos existentes a capacitaciones
+activas. También acepta archivos Excel/CSV con columnas Nombre, Apellido,
+Documento (o DNI) y Correo opcional, hasta 1000 filas o 2 MB. Descarga una
+plantilla propia del producto. La vista previa detecta documentos repetidos en
+el archivo, alumnos ya inscritos y documentos que figuran con otro nombre.
+Al confirmar, el servidor repite la validación y guarda alumnos e inscripciones
+en una sola sentencia; una segunda carga no duplica inscripciones. La carga
+de alumnos no emite certificados ni reserva códigos. El campo Documento es
+obligatorio en la importación, y debe conservarse como texto si tiene ceros
+iniciales. La búsqueda y edición, la emisión, los PDF y las descargas siguen
+pendientes en el modo producto. No hay registro público ni datos de ejemplo.
 
 ## Decisiones del MVP
 
@@ -93,8 +101,8 @@ probar aislamiento entre instituciones antes de dar acceso a clientes.
 1. Separar una aplicación comercial limpia del sitio institucional dentro de
    un repositorio propio y una base nueva.
 2. Implementar registro de instituciones y alta administrativa controlada.
-3. Conectar panel, cursos y alumnos al nuevo esquema con aislamiento probado.
-4. Integrar importación, emisión y validación; medir un lote de 800 filas.
+3. Completar búsqueda y edición de cursos y alumnos con aislamiento probado.
+4. Integrar emisión y validación; probar la generación de 800 credenciales.
 5. Incorporar PDF en segundo plano, ZIP, estadísticas y piloto con dos
    instituciones de prueba.
 

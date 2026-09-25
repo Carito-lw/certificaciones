@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { createFileRoute, Link, redirect, useRouter } from "@tanstack/react-router";
-import { createInstitutionCourse, createInstitutionStudent, getInstitutionPanel, getProductSession } from "@/lib/product";
+import { createCourseEnrollment, createInstitutionCourse, createInstitutionStudent, getInstitutionPanel, getProductSession } from "@/lib/product";
+import { confirmInstitutionImport, previewInstitutionImport, type ImportInput } from "@/lib/product-import";
+import { downloadStudentTemplate, parseStudentSheet } from "@/lib/product-spreadsheet";
 
 export const Route = createFileRoute("/producto/$slug")({
   loader: async ({ params }) => {
@@ -11,11 +13,17 @@ export const Route = createFileRoute("/producto/$slug")({
 });
 
 function InstitutionPanel() {
-  const { institution, courses, students } = Route.useLoaderData();
+  const { institution, courses, students, enrollments } = Route.useLoaderData();
   const router = useRouter();
   const [tab, setTab] = useState<"courses" | "students">("courses");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [importRows, setImportRows] = useState<ImportInput["rows"]>([]);
+  const [importCourseId, setImportCourseId] = useState("");
+  const [importPreview, setImportPreview] = useState<Awaited<ReturnType<typeof previewInstitutionImport>> | null>(null);
+  const [importResult, setImportResult] = useState("");
+  const [importError, setImportError] = useState("");
+  const [importBusy, setImportBusy] = useState(false);
   const canManageCourses = institution.role === "owner" || institution.role === "admin";
   const canManageStudents = canManageCourses || institution.role === "issuer";
 
@@ -52,6 +60,48 @@ function InstitutionPanel() {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No pudimos guardar el alumno.");
     } finally { setSaving(false); }
+  }
+
+  async function enrollStudent(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(""); setSaving(true);
+    const form = event.currentTarget;
+    const fields = new FormData(form);
+    try {
+      await createCourseEnrollment({ data: {
+        slug: institution.slug, courseId: String(fields.get("courseId")), studentId: String(fields.get("studentId")),
+      } });
+      form.reset();
+      await router.invalidate();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "No pudimos asociar al alumno."); }
+    finally { setSaving(false); }
+  }
+
+  async function selectFile(file?: File) {
+    setImportRows([]); setImportPreview(null); setImportResult(""); setImportError("");
+    if (!file) return;
+    try { setImportRows(await parseStudentSheet(file)); }
+    catch (cause) { setImportError(cause instanceof Error ? cause.message : "No pudimos leer el archivo."); }
+  }
+
+  async function previewImport() {
+    setImportBusy(true); setImportError(""); setImportPreview(null);
+    try {
+      const result = await previewInstitutionImport({ data: { slug: institution.slug, courseId: importCourseId, rows: importRows } });
+      setImportPreview(result);
+    } catch (cause) { setImportError(cause instanceof Error ? cause.message : "No pudimos validar la lista."); }
+    finally { setImportBusy(false); }
+  }
+
+  async function confirmImport() {
+    setImportBusy(true); setImportError("");
+    try {
+      const result = await confirmInstitutionImport({ data: { slug: institution.slug, courseId: importCourseId, rows: importRows } });
+      setImportResult(`${result.enrolled} alumnos asociados a ${result.courseName}; ${result.alreadyEnrolled} ya estaban inscriptos.`);
+      setImportRows([]); setImportPreview(null);
+      await router.invalidate();
+    } catch (cause) { setImportPreview(null); setImportError(cause instanceof Error ? cause.message : "No pudimos importar la lista."); }
+    finally { setImportBusy(false); }
   }
 
   const inputClass = "mt-1 w-full rounded-lg border border-border bg-bg px-3 py-2.5 text-fg";
@@ -105,6 +155,41 @@ function InstitutionPanel() {
           </div> : <p className="mt-5 rounded-xl border border-border bg-surface p-6 text-muted">Todavía no hay capacitaciones cargadas.</p>}
         </section> : <section aria-label="Alumnos">
           <h2 className="mt-8 text-2xl font-semibold">Alumnos</h2>
+          {canManageStudents && <div className="mt-5 rounded-xl border border-border bg-surface p-6">
+            <h3 className="text-lg font-semibold">Importar alumnos de Excel o CSV</h3>
+            <p className="mt-2 text-sm text-muted">Elegí una capacitación, cargá hasta 1000 alumnos y revisá la lista antes de confirmar. Importar no emite certificados.</p>
+            <button type="button" onClick={() => void downloadStudentTemplate()} className="mt-3 text-sm font-semibold text-primary hover:underline">Descargar plantilla de ejemplo</button>
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <label className={labelClass}>Capacitación
+                <select className={inputClass} value={importCourseId} onChange={(e) => { setImportCourseId(e.target.value); setImportPreview(null); setImportResult(""); }}>
+                  <option value="">Seleccionar capacitación</option>
+                  {courses.filter((course) => course.status === "active").map((course) => <option key={course.id} value={course.id}>{course.name} · {course.period}</option>)}
+                </select>
+              </label>
+              <label className={labelClass}>Archivo Excel o CSV
+                <input type="file" accept=".xlsx,.xls,.csv" className={inputClass} onChange={(event) => {
+                  const file = event.currentTarget.files?.[0];
+                  event.currentTarget.value = "";
+                  void selectFile(file);
+                }} />
+              </label>
+            </div>
+            {importRows.length > 0 && <p className="mt-4 text-sm">{importRows.length} filas leídas. Ejemplo: {importRows.slice(0, 3).map((row) => `${row.lastName}, ${row.firstName}`).join(" · ")}</p>}
+            {importError && <p role="alert" className="mt-4 text-sm text-red-400">{importError}</p>}
+            {importPreview && <div className="mt-5 rounded-lg border border-border bg-bg p-4 text-sm">
+              <p className="font-semibold">Vista previa: {importPreview.courseName} · {importPreview.total} alumnos</p>
+              <p className="mt-2 text-muted">{importPreview.existingStudents} ya figuran en la institución; {importPreview.alreadyEnrolled} ya están inscriptos en este curso.</p>
+              {importPreview.problems.length > 0 && <ul className="mt-3 list-inside list-disc text-red-400">
+                {importPreview.problems.slice(0, 15).map((problem, index) => <li key={`${problem.rowNumber}-${index}`}>Fila {problem.rowNumber}: {problem.problem}</li>)}
+                {importPreview.problems.length > 15 && <li>Hay {importPreview.problems.length - 15} errores adicionales.</li>}
+              </ul>}
+            </div>}
+            {importResult && <p role="status" className="mt-4 text-sm text-primary">{importResult}</p>}
+            <div className="mt-5 flex flex-wrap gap-3">
+              <button type="button" disabled={importBusy || !importCourseId || !importRows.length} onClick={() => void previewImport()} className="rounded-lg border border-border px-5 py-3 font-semibold disabled:opacity-50">Revisar lista</button>
+              {importPreview?.valid && <button type="button" disabled={importBusy} onClick={() => void confirmImport()} className="rounded-lg bg-primary px-5 py-3 font-semibold text-primary-fg disabled:opacity-50">{importBusy ? "Importando…" : `Confirmar ${importPreview.total} alumnos`}</button>}
+            </div>
+          </div>}
           {canManageStudents && <form onSubmit={addStudent} className="mt-5 grid gap-4 rounded-xl border border-border bg-surface p-6 sm:grid-cols-2">
             <h3 className="text-lg font-semibold sm:col-span-2">Nuevo alumno</h3>
             <label className={labelClass}>Nombre<input name="firstName" required maxLength={100} className={inputClass} /></label>
@@ -114,10 +199,22 @@ function InstitutionPanel() {
             {error && <p role="alert" className="text-sm text-red-400 sm:col-span-2">{error}</p>}
             <button disabled={saving} type="submit" className="rounded-lg bg-primary px-5 py-3 font-semibold text-primary-fg disabled:opacity-50 sm:col-span-2 sm:justify-self-start">{saving ? "Guardando…" : "Agregar alumno"}</button>
           </form>}
+          {canManageStudents && students.length > 0 && courses.some((course) => course.status === "active") && <form onSubmit={enrollStudent} className="mt-5 grid gap-4 rounded-xl border border-border bg-surface p-6 sm:grid-cols-2">
+            <h3 className="text-lg font-semibold sm:col-span-2">Asociar un alumno existente</h3>
+            <label className={labelClass}>Alumno<select name="studentId" required defaultValue="" className={inputClass}>
+              <option value="" disabled>Elegir alumno</option>{students.map((student) => <option key={student.id} value={student.id}>{student.lastName}, {student.firstName} · {student.documentNumber || "sin documento"}</option>)}
+            </select></label>
+            <label className={labelClass}>Capacitación<select name="courseId" required defaultValue="" className={inputClass}>
+              <option value="" disabled>Elegir capacitación</option>{courses.filter((course) => course.status === "active").map((course) => <option key={course.id} value={course.id}>{course.name}</option>)}
+            </select></label>
+            {error && <p role="alert" className="text-sm text-red-400 sm:col-span-2">{error}</p>}
+            <button type="submit" disabled={saving} className="rounded-lg border border-border px-5 py-3 font-semibold disabled:opacity-50 sm:col-span-2 sm:justify-self-start">{saving ? "Guardando…" : "Asociar alumno"}</button>
+          </form>}
           {students.length ? <div className="mt-5 overflow-hidden rounded-xl border border-border">
             {students.map((student) => <div key={student.id} className="border-b border-border bg-surface p-5 last:border-0">
               <p className="font-semibold">{student.lastName}, {student.firstName}</p>
               <p className="mt-1 text-sm text-muted">{[student.documentNumber && `Documento: ${student.documentNumber}`, student.email].filter(Boolean).join(" · ") || "Sin datos de contacto"}</p>
+              <p className="mt-1 text-xs text-muted">{enrollments.filter((item) => item.studentId === student.id).map((item) => courses.find((course) => course.id === item.courseId)?.name).filter(Boolean).join(" · ") || "Sin capacitación asignada"}</p>
             </div>)}
           </div> : <p className="mt-5 rounded-xl border border-border bg-surface p-6 text-muted">Todavía no hay alumnos cargados.</p>}
           {institution.studentCount > 100 && <p className="mt-4 text-sm text-muted">Mostrando los últimos 100 alumnos de {institution.studentCount}.</p>}

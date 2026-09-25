@@ -30,6 +30,8 @@ export type InstitutionStudent = {
   email: string | null;
 };
 
+export type CourseEnrollment = { courseId: string; studentId: string; outcome: "pending" | "eligible" | "not_eligible" };
+
 const slugInput = z.object({ slug: z.string().trim().toLowerCase().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/) });
 const courseInput = slugInput.extend({
   name: z.string().trim().min(2).max(160),
@@ -40,8 +42,11 @@ const courseInput = slugInput.extend({
 const studentInput = slugInput.extend({
   firstName: z.string().trim().min(1).max(100),
   lastName: z.string().trim().min(1).max(100),
-  documentNumber: z.string().trim().max(40).optional(),
+  documentNumber: z.string().trim().max(40).transform((value) => value.replace(/[^a-zA-Z0-9]/g, "").toUpperCase()).optional(),
   email: z.union([z.email().max(254), z.literal("")]).optional(),
+});
+const enrollmentInput = slugInput.extend({
+  courseId: z.uuid(), studentId: z.uuid(),
 });
 
 function safeWriteError(error: unknown, duplicateMessage: string): never {
@@ -78,6 +83,7 @@ export async function getInstitutionCourses(sql: Sql, userId: string, slug: stri
   institution: InstitutionSummary;
   courses: InstitutionCourse[];
   students: InstitutionStudent[];
+  enrollments: CourseEnrollment[];
 }> {
   const institution = (await listUserInstitutions(sql, userId)).find((item) => item.slug === slug);
   if (!institution) throw new Error("No tenés acceso a esta institución.");
@@ -102,10 +108,39 @@ export async function getInstitutionCourses(sql: Sql, userId: string, slug: stri
     order by s.created_at desc, s.id desc
     limit 100
   `;
-  return { institution, courses: rows, students: students.map((s) => ({
+  const enrollments = await sql<CourseEnrollment>`
+    select e.course_id as "courseId", e.student_id as "studentId", e.outcome
+    from enrollments e join memberships m on m.institution_id = e.institution_id
+    where e.institution_id = ${institution.id} and m.user_id = ${userId}
+      and e.student_id in (select s.id from students s where s.institution_id = ${institution.id} order by s.created_at desc, s.id desc limit 100)
+  `;
+  return { institution, courses: rows, enrollments, students: students.map((s) => ({
     id: s.id, firstName: s.first_name, lastName: s.last_name,
     documentNumber: s.document_number, email: s.email,
   })) };
+}
+
+export async function insertCourseEnrollment(sql: Sql, userId: string, input: z.infer<typeof enrollmentInput>) {
+  const rows = await sql<{ id: string }>`
+    with added as (
+      insert into enrollments (institution_id, course_id, student_id)
+      select i.id, c.id, s.id
+      from institutions i
+      join memberships m on m.institution_id = i.id
+      join courses c on c.institution_id = i.id and c.id = ${input.courseId} and c.status = 'active'
+      join students s on s.institution_id = i.id and s.id = ${input.studentId}
+      where i.slug = ${input.slug} and i.status = 'active'
+        and m.user_id = ${userId} and m.role in ('owner', 'admin', 'issuer')
+      on conflict (institution_id, course_id, student_id) do nothing
+      returning id, institution_id
+    ), audited as (
+      insert into audit_events (institution_id, actor_user_id, action, entity_type, entity_id)
+      select institution_id, ${userId}, 'enrollment.created', 'enrollment', id from added
+    )
+    select id from added
+  `;
+  if (!rows.length) throw new Error("No se pudo asociar: comprobá permisos, curso activo y si el alumno ya está inscripto.");
+  return rows[0];
 }
 
 export async function insertInstitutionCourse(sql: Sql, userId: string, input: z.infer<typeof courseInput>) {
@@ -192,4 +227,12 @@ export const createInstitutionStudent = createServerFn({ method: "POST" })
     const userId = await requireProductUserId();
     const { getSql } = await import("./db");
     return insertInstitutionStudent(await getSql(), userId, data);
+  });
+
+export const createCourseEnrollment = createServerFn({ method: "POST" })
+  .validator((input: z.input<typeof enrollmentInput>) => enrollmentInput.parse(input))
+  .handler(async ({ data }) => {
+    const userId = await requireProductUserId();
+    const { getSql } = await import("./db");
+    return insertCourseEnrollment(await getSql(), userId, data);
   });
