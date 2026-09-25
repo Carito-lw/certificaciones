@@ -6,6 +6,26 @@ de datos, certificados, rutas públicas y despliegue no son el entorno de este
 producto. `schema.sql` se aplica únicamente a una base nueva y vacía, después
 del esquema de autenticación.
 
+## Estado de la implementación
+
+`npm run dev:product` inicia la aplicación en modo producto con una base local
+temporal. `npm run build:product` compila este modo. En un despliegue nuevo,
+configurar únicamente `SAAS_DATABASE_URL` con una base vacía y distinta de la
+base de Breakpoint; el comando de build del sitio nuevo debe ser
+`npm run build:product`. El proceso ejecuta el esquema de autenticación y el
+esquema SaaS en orden. Nunca se copia información de los certificados reales.
+
+El panel inicial está en `/producto`: login, instituciones del usuario,
+estadísticas básicas y cursos de cada institución. Las consultas requieren
+sesión y membresía en la institución. Para dar de alta la primera institución
+en una base nueva, `npm run institution:create -- --slug=... --institution=...
+--prefix=... --email=... --name=...` utiliza la contraseña recibida mediante
+`SAAS_BOOTSTRAP_PASSWORD`. No pasar la contraseña como argumento ni guardar
+estas variables en el repositorio. Las credenciales existentes no se importan.
+
+Este panel todavía es de lectura. El alta de cursos y alumnos, la importación,
+la emisión, los PDF y las descargas siguen pendientes en el modo producto.
+
 ## Decisiones del MVP
 
 - Cada institución tiene su marca, administradores, cursos, alumnos, plantillas,

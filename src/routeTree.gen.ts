@@ -14,6 +14,9 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as VerificarRouteImport } from './routes/verificar'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminLoginRouteImport } from './routes/admin.login'
+import { Route as ProductoIndexRouteImport } from './routes/producto.index'
+import { Route as ProductoSlugRouteImport } from './routes/producto.$slug'
+import { Route as ProductoLoginRouteImport } from './routes/producto.login'
 import { Route as VerificarIndexRouteImport } from './routes/verificar.index'
 import { Route as VerificarCodigoRouteImport } from './routes/verificar.$codigo'
 import { Route as AdminCertificadosIndexRouteImport } from './routes/admin.certificados.index'
@@ -44,6 +47,21 @@ const AdminLoginRoute = AdminLoginRouteImport.update({
   path: '/login',
   getParentRoute: () => AdminRoute,
 } as any)
+const ProductoIndexRoute = ProductoIndexRouteImport.update({
+  id: '/producto/',
+  path: '/producto/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProductoSlugRoute = ProductoSlugRouteImport.update({
+  id: '/producto/$slug',
+  path: '/producto/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProductoLoginRoute = ProductoLoginRouteImport.update({
+  id: '/producto/login',
+  path: '/producto/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const VerificarIndexRoute = VerificarIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -70,8 +88,11 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRouteWithChildren
   '/verificar': typeof VerificarRouteWithChildren
   '/admin/login': typeof AdminLoginRoute
+  '/producto/$slug': typeof ProductoSlugRoute
+  '/producto/login': typeof ProductoLoginRoute
   '/verificar/$codigo': typeof VerificarCodigoRoute
   '/admin/': typeof AdminIndexRoute
+  '/producto/': typeof ProductoIndexRoute
   '/verificar/': typeof VerificarIndexRoute
   '/admin/certificados/$codigo': typeof AdminCertificadosCodigoRoute
   '/admin/certificados/': typeof AdminCertificadosIndexRoute
@@ -79,8 +100,11 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin/login': typeof AdminLoginRoute
+  '/producto/$slug': typeof ProductoSlugRoute
+  '/producto/login': typeof ProductoLoginRoute
   '/verificar/$codigo': typeof VerificarCodigoRoute
   '/admin': typeof AdminIndexRoute
+  '/producto': typeof ProductoIndexRoute
   '/verificar': typeof VerificarIndexRoute
   '/admin/certificados/$codigo': typeof AdminCertificadosCodigoRoute
   '/admin/certificados': typeof AdminCertificadosIndexRoute
@@ -91,8 +115,11 @@ export interface FileRoutesById {
   '/admin': typeof AdminRouteWithChildren
   '/verificar': typeof VerificarRouteWithChildren
   '/admin/login': typeof AdminLoginRoute
+  '/producto/$slug': typeof ProductoSlugRoute
+  '/producto/login': typeof ProductoLoginRoute
   '/verificar/$codigo': typeof VerificarCodigoRoute
   '/admin/': typeof AdminIndexRoute
+  '/producto/': typeof ProductoIndexRoute
   '/verificar/': typeof VerificarIndexRoute
   '/admin/certificados/$codigo': typeof AdminCertificadosCodigoRoute
   '/admin/certificados/': typeof AdminCertificadosIndexRoute
@@ -104,8 +131,11 @@ export interface FileRouteTypes {
     | '/admin'
     | '/verificar'
     | '/admin/login'
+    | '/producto/$slug'
+    | '/producto/login'
     | '/verificar/$codigo'
     | '/admin/'
+    | '/producto/'
     | '/verificar/'
     | '/admin/certificados/$codigo'
     | '/admin/certificados/'
@@ -113,8 +143,11 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/admin/login'
+    | '/producto/$slug'
+    | '/producto/login'
     | '/verificar/$codigo'
     | '/admin'
+    | '/producto'
     | '/verificar'
     | '/admin/certificados/$codigo'
     | '/admin/certificados'
@@ -124,8 +157,11 @@ export interface FileRouteTypes {
     | '/admin'
     | '/verificar'
     | '/admin/login'
+    | '/producto/$slug'
+    | '/producto/login'
     | '/verificar/$codigo'
     | '/admin/'
+    | '/producto/'
     | '/verificar/'
     | '/admin/certificados/$codigo'
     | '/admin/certificados/'
@@ -135,6 +171,9 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRouteWithChildren
   VerificarRoute: typeof VerificarRouteWithChildren
+  ProductoSlugRoute: typeof ProductoSlugRoute
+  ProductoLoginRoute: typeof ProductoLoginRoute
+  ProductoIndexRoute: typeof ProductoIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -173,6 +212,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/login'
       preLoaderRoute: typeof AdminLoginRouteImport
       parentRoute: typeof AdminRoute
+    }
+    '/producto/': {
+      id: '/producto/'
+      path: '/producto'
+      fullPath: '/producto/'
+      preLoaderRoute: typeof ProductoIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/producto/$slug': {
+      id: '/producto/$slug'
+      path: '/producto/$slug'
+      fullPath: '/producto/$slug'
+      preLoaderRoute: typeof ProductoSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/producto/login': {
+      id: '/producto/login'
+      path: '/producto/login'
+      fullPath: '/producto/login'
+      preLoaderRoute: typeof ProductoLoginRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/verificar/': {
       id: '/verificar/'
@@ -239,6 +299,9 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRouteWithChildren,
   VerificarRoute: VerificarRouteWithChildren,
+  ProductoSlugRoute: ProductoSlugRoute,
+  ProductoLoginRoute: ProductoLoginRoute,
+  ProductoIndexRoute: ProductoIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

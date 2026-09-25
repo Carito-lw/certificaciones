@@ -9,6 +9,7 @@ const rawDatabaseUrl =
   typeof process !== "undefined" ? process.env.DATABASE_URL : undefined;
 const databaseUrl =
   rawDatabaseUrl && rawDatabaseUrl.trim() ? rawDatabaseUrl : undefined;
+const productMode = process.env.PRODUCT_MODE === "saas";
 
 /**
  * Active backend: real **Neon** when `DATABASE_URL` is set (deployed / configured
@@ -141,19 +142,23 @@ async function createPgliteSql(): Promise<Sql> {
   const migrate = async (): Promise<void> => {
     let migrations: Record<string, string> = {};
     if (typeof (import.meta as any).glob === "function") {
-      migrations = (import.meta as any).glob("/migrations/*.sql", {
-        query: "?raw",
-        import: "default",
-        eager: true,
-      }) as Record<string, string>;
+      migrations = productMode
+        ? {
+            ...import.meta.glob("/migrations/auth/*.sql", { query: "?raw", import: "default", eager: true }),
+            ...import.meta.glob("/product/*.sql", { query: "?raw", import: "default", eager: true }),
+          }
+        : import.meta.glob("/migrations/*.sql", { query: "?raw", import: "default", eager: true });
     } else {
       try {
         const { readdirSync, readFileSync } = await import("node:fs");
         const { resolve, join } = await import("node:path");
-        const migrationsDir = resolve("migrations");
-        const files = readdirSync(migrationsDir).filter((f) => f.endsWith(".sql"));
-        for (const f of files) {
-          migrations[`/migrations/${f}`] = readFileSync(join(migrationsDir, f), "utf8");
+        const directories = productMode ? ["migrations/auth", "product"] : ["migrations"];
+        for (const directory of directories) {
+          const migrationsDir = resolve(directory);
+          const files = readdirSync(migrationsDir).filter((f) => f.endsWith(".sql"));
+          for (const f of files) {
+            migrations[`/${directory}/${f}`] = readFileSync(join(migrationsDir, f), "utf8");
+          }
         }
       } catch (e) {
         console.warn("[db] Could not read migrations from filesystem:", e);

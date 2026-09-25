@@ -1,14 +1,20 @@
-import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
+import { createRootRoute, HeadContent, Outlet, Scripts, redirect } from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import appCss from "../styles.css?url";
 
-const APP_NAME = "Breakpoint Creativa";
+const isProduct = import.meta.env.VITE_PRODUCT_MODE === "saas";
+const APP_NAME = isProduct ? "Plataforma de credenciales" : "Breakpoint Creativa";
 
 const GA_ID = import.meta.env.VITE_GA_ID || "G-DQBXNVGMST";
 const CLARITY_ID = import.meta.env.VITE_CLARITY_ID || "yguguw8cqq";
 
 export const Route = createRootRoute({
+  beforeLoad: ({ location }) => {
+    if (isProduct && !location.pathname.startsWith("/producto")) {
+      throw redirect({ to: "/producto" });
+    }
+  },
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -16,13 +22,14 @@ export const Route = createRootRoute({
       { title: APP_NAME },
       {
         name: "description",
-        content:
-          "No somos tendencia, somos la fuerza que la crea. Capacitaciones y consultoría en inteligencia artificial. Mendoza.",
+        content: isProduct
+          ? "Emisión, administración y validación de credenciales digitales para instituciones."
+          : "No somos tendencia, somos la fuerza que la crea. Capacitaciones y consultoría en inteligencia artificial. Mendoza.",
       },
       { name: "theme-color", content: "#0E0D0B" },
     ],
     links: [
-      { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
+      ...(!isProduct ? [{ rel: "icon", type: "image/svg+xml", href: "/favicon.svg" }] : []),
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       {
         rel: "preconnect",
@@ -38,7 +45,7 @@ export const Route = createRootRoute({
       { rel: "apple-touch-icon", href: "/__grok/icon-180.png" },
     ],
     scripts: [
-      ...(GA_ID
+      ...(!isProduct && GA_ID
         ? [
             {
               async: true,
@@ -54,7 +61,7 @@ export const Route = createRootRoute({
             },
           ]
         : []),
-      ...(CLARITY_ID
+      ...(!isProduct && CLARITY_ID
         ? [
             {
               children: `

@@ -7,6 +7,7 @@ test("tenant foreign keys reject a student from another institution", async () =
   const db = new PGlite();
   try {
     await db.exec(readFileSync("migrations/auth/0001_auth.sql", "utf8"));
+    await db.exec(readFileSync("product/0002_auth_role.sql", "utf8"));
     await db.exec(readFileSync("product/schema.sql", "utf8"));
     await db.query(`insert into institutions (slug, name, code_prefix) values
       ('municipio-a', 'Municipio A', 'MA'),
@@ -14,6 +15,14 @@ test("tenant foreign keys reject a student from another institution", async () =
     const { rows: institutions } = await db.query("select id, slug from institutions order by slug");
     const a = institutions.find((i) => i.slug === "municipio-a").id;
     const b = institutions.find((i) => i.slug === "instituto-b").id;
+    await db.query(`insert into "user" ("id", "name", "email", "emailVerified") values
+      ('user-a', 'Operador A', 'a@example.test', true),
+      ('user-b', 'Operador B', 'b@example.test', true)`);
+    await db.query("insert into memberships (institution_id, user_id, role) values ($1, 'user-a', 'owner')", [a]);
+    await db.query("insert into memberships (institution_id, user_id, role) values ($1, 'user-b', 'owner')", [b]);
+    const { rows: visible } = await db.query(`select i.slug from institutions i
+      join memberships m on m.institution_id = i.id where m.user_id = $1`, ["user-a"]);
+    assert.deepEqual(visible.map((r) => r.slug), ["municipio-a"]);
     const { rows: course } = await db.query(
       "insert into courses (institution_id, name, code, hours, period) values ($1, 'Curso', 'CUR', 12, '2026') returning id",
       [a],

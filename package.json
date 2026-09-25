@@ -8,7 +8,11 @@
   },
   "scripts": {
     "dev": "node scripts/with-app-env.mjs vite dev --host 0.0.0.0 --port 8080",
+    "dev:product": "node product/run.mjs dev",
     "build": "node scripts/with-app-env.mjs vite build && npm run db:migrate",
+    "build:product": "node product/run.mjs build",
+    "db:migrate:product": "node product/migrate.mjs",
+    "institution:create": "node product/create-institution.mjs",
     "db:migrate": "node scripts/migrate.mjs",
     "build:dev": "node scripts/with-app-env.mjs vite build --mode development",
     "preview": "node scripts/with-app-env.mjs vite preview",
