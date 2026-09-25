@@ -6,13 +6,14 @@ create table if not exists "user" (
   "email" text not null unique,
   "emailVerified" boolean not null default false,
   "image" text,
-  "role" text not null default 'admin',
+  "role" text not null default 'user',
   "createdAt" timestamptz default CURRENT_TIMESTAMP not null,
   "updatedAt" timestamptz default CURRENT_TIMESTAMP not null
 );
 
 -- Asegurar columna role si user ya existía
-alter table "user" add column if not exists "role" text not null default 'admin';
+alter table "user" add column if not exists "role" text not null default 'user';
+alter table "user" alter column "role" set default 'user';
 
 create table if not exists "session" (
   "id" text not null primary key,

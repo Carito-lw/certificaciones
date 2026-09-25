@@ -64,7 +64,7 @@ export async function getSessionUser(
     return {
       id: session.user.id,
       email: session.user.email ?? null,
-      role: (session.user as { role?: string }).role || "admin",
+      role: (session.user as { role?: string }).role || "user",
     };
   } catch {
     return null;
@@ -87,7 +87,7 @@ export async function getAdminSessionUser(
   try {
     const session = await auth.api.getSession({ headers });
     if (!session?.user) return null;
-    const role = (session.user as { role?: string }).role || "admin";
+    const role = (session.user as { role?: string }).role || "user";
     return {
       id: session.user.id,
       name: session.user.name || "Administrador",

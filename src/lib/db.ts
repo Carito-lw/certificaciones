@@ -85,43 +85,6 @@ function toSql(run: Run): Sql {
   return sql;
 }
 
-export async function seedDefaultAdmins(runner: (text: string, params?: unknown[]) => Promise<unknown>): Promise<void> {
-  try {
-    const { hashPassword } = await import("@better-auth/utils/password");
-    const defaultPasswordHash = await hashPassword("1978");
-
-    await runner(`
-      insert into "user" ("id", "name", "email", "emailVerified", "role", "createdAt", "updatedAt")
-      values ('admin-carolina', 'Carolina Riveros', 'carolina@breakpointcreativa.com', true, 'admin', now(), now())
-      on conflict ("email") do update set "role" = 'admin'
-    `);
-    await runner(`
-      insert into "account" ("id", "accountId", "providerId", "userId", "password", "createdAt", "updatedAt")
-      values ('acc-carolina', 'carolina@breakpointcreativa.com', 'credential', 'admin-carolina', $1, now(), now())
-      on conflict ("id") do update set "password" = $1
-    `, [defaultPasswordHash]);
-    await runner(`
-      update "account" set "password" = $1 where "accountId" = 'carolina@breakpointcreativa.com' and "providerId" = 'credential'
-    `, [defaultPasswordHash]);
-
-    await runner(`
-      insert into "user" ("id", "name", "email", "emailVerified", "role", "createdAt", "updatedAt")
-      values ('admin-gustavo', 'Gustavo Rojas', 'gustavo@breakpointcreativa.com', true, 'admin', now(), now())
-      on conflict ("email") do update set "role" = 'admin'
-    `);
-    await runner(`
-      insert into "account" ("id", "accountId", "providerId", "userId", "password", "createdAt", "updatedAt")
-      values ('acc-gustavo', 'gustavo@breakpointcreativa.com', 'credential', 'admin-gustavo', $1, now(), now())
-      on conflict ("id") do update set "password" = $1
-    `, [defaultPasswordHash]);
-    await runner(`
-      update "account" set "password" = $1 where "accountId" = 'gustavo@breakpointcreativa.com' and "providerId" = 'credential'
-    `, [defaultPasswordHash]);
-  } catch {
-    /* ignore seeding errors if tables are still initializing */
-  }
-}
-
 function createNeonSql(): Promise<Sql> {
   globalRef.__pgSqlPromise__ ??= (async () => {
     // Regular Postgres driver: node-postgres (`pg`) — works directly with Neon's
@@ -135,9 +98,6 @@ function createNeonSql(): Promise<Sql> {
       const res = await pool.query(text, params);
       return res.rows as T[];
     });
-
-    // Auto-seed default admins on first Neon connection
-    await seedDefaultAdmins((text, params) => pool.query(text, params));
 
     return sql;
   })().catch((err) => {
@@ -212,8 +172,6 @@ async function createPgliteSql(): Promise<Sql> {
       });
     }
 
-    // Auto-seed default admins on local development
-    await seedDefaultAdmins((text, params) => pg.query(text, params as unknown[]));
   };
   const pass = (globalRef.__pgliteMigrateChain__ ?? Promise.resolve())
     .catch(() => undefined) // an earlier failed pass must not wedge the chain

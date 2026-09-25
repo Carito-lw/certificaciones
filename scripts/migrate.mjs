@@ -75,42 +75,6 @@ async function main() {
     }
     console.log(count ? `[migrate] done — ${count} migration(s) applied.` : "[migrate] up to date.");
 
-    // Seed default admin accounts if auth tables exist
-    try {
-      const { hashPassword } = await import("@better-auth/utils/password");
-      const defaultPasswordHash = await hashPassword("1978");
-
-      await client.query(`
-        insert into "user" ("id", "name", "email", "emailVerified", "role", "createdAt", "updatedAt")
-        values ('admin-carolina', 'Carolina Riveros', 'carolina@breakpointcreativa.com', true, 'admin', now(), now())
-        on conflict ("email") do update set "role" = 'admin'
-      `);
-      await client.query(`
-        insert into "account" ("id", "accountId", "providerId", "userId", "password", "createdAt", "updatedAt")
-        values ('acc-carolina', 'carolina@breakpointcreativa.com', 'credential', 'admin-carolina', $1, now(), now())
-        on conflict ("id") do update set "password" = $1
-      `, [defaultPasswordHash]);
-      await client.query(`
-        update "account" set "password" = $1 where "accountId" = 'carolina@breakpointcreativa.com' and "providerId" = 'credential'
-      `, [defaultPasswordHash]);
-
-      await client.query(`
-        insert into "user" ("id", "name", "email", "emailVerified", "role", "createdAt", "updatedAt")
-        values ('admin-gustavo', 'Gustavo Rojas', 'gustavo@breakpointcreativa.com', true, 'admin', now(), now())
-        on conflict ("email") do update set "role" = 'admin'
-      `);
-      await client.query(`
-        insert into "account" ("id", "accountId", "providerId", "userId", "password", "createdAt", "updatedAt")
-        values ('acc-gustavo', 'gustavo@breakpointcreativa.com', 'credential', 'admin-gustavo', $1, now(), now())
-        on conflict ("id") do update set "password" = $1
-      `, [defaultPasswordHash]);
-      await client.query(`
-        update "account" set "password" = $1 where "accountId" = 'gustavo@breakpointcreativa.com' and "providerId" = 'credential'
-      `, [defaultPasswordHash]);
-      console.log("[migrate] default admin accounts ready with updated password.");
-    } catch (e) {
-      console.warn("[migrate] could not seed admin accounts:", e?.message);
-    }
   } finally {
     client.release();
     await pool.end();

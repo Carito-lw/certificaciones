@@ -222,14 +222,15 @@ export const auth = betterAuth({
     additionalFields: {
       role: {
         type: "string",
-        defaultValue: "admin",
+        defaultValue: "user",
         required: false,
+        input: false,
       },
     },
   },
 
   // Local email/password — toggled only via `./email-password` (not a plugin).
-  ...(emailAndPasswordEnabled ? { emailAndPassword: { enabled: true, minPasswordLength: 4 } } : {}),
+  ...(emailAndPasswordEnabled ? { emailAndPassword: { enabled: true, disableSignUp: true, minPasswordLength: 12 } } : {}),
 
   // `__Host-` prefixed cookies: the browser REFUSES any same-named cookie that
   // carries a `Domain` attribute, so a sibling `*.grok.me` app cannot "toss" a
