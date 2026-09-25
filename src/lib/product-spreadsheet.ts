@@ -21,19 +21,27 @@ export async function parseStudentSheet(file: File): Promise<Row[]> {
     lastName: ["apellido", "apellidos", "lastname"],
     documentNumber: ["dni", "documento", "doc", "identificacion", "cedula"],
     email: ["email", "correo", "correoelectronico"],
+    outcome: ["resultado", "aptitud", "estado"],
   };
   const positions = Object.fromEntries(Object.entries(aliases).map(([field, names]) =>
     [field, headers.findIndex((header) => names.includes(header))]));
   if ([positions.firstName, positions.lastName, positions.documentNumber].some((index) => index < 0)) {
     throw new Error("Faltan columnas obligatorias: Nombre, Apellido y Documento (o DNI).");
   }
-  const rows = values.slice(1).map((cells, index) => ({
-    rowNumber: index + 2,
-    firstName: normalize(cells[positions.firstName]),
-    lastName: normalize(cells[positions.lastName]),
-    documentNumber: normalize(cells[positions.documentNumber]),
-    email: positions.email < 0 ? "" : normalize(cells[positions.email]),
-  })).filter((row) => row.firstName || row.lastName || row.documentNumber || row.email);
+  const rows = values.slice(1).map((cells, index) => {
+    const raw = positions.outcome < 0 ? "" : normalizeHeader(cells[positions.outcome]);
+    const mapped: "eligible" | "not_eligible" | undefined | null = raw === "apto" ? "eligible" : raw === "noapto" ? "not_eligible" :
+      raw === "pendiente" || raw === "" ? undefined : null;
+    if (mapped === null) throw new Error(`Fila ${index + 2}: el resultado debe ser Apto, No apto o Pendiente.`);
+    return {
+      rowNumber: index + 2,
+      firstName: normalize(cells[positions.firstName]),
+      lastName: normalize(cells[positions.lastName]),
+      documentNumber: normalize(cells[positions.documentNumber]),
+      email: positions.email < 0 ? "" : normalize(cells[positions.email]),
+      outcome: mapped,
+    };
+  }).filter((row) => row.firstName || row.lastName || row.documentNumber || row.email);
   if (!rows.length) throw new Error("No hay alumnos para importar.");
   if (rows.length > 1000) throw new Error("El máximo es de 1000 alumnos por archivo.");
   for (const row of rows) {
@@ -47,9 +55,9 @@ export async function parseStudentSheet(file: File): Promise<Row[]> {
 export async function downloadStudentTemplate(): Promise<void> {
   const XLSX = await import("xlsx");
   const workbook = XLSX.utils.book_new();
-  const sheet = XLSX.utils.aoa_to_sheet([["Nombre", "Apellido", "Documento", "Correo"],
-    ["Ana", "Pérez", "32123456", "ana@ejemplo.com"]]);
-  sheet["!cols"] = [{ wch: 22 }, { wch: 22 }, { wch: 20 }, { wch: 30 }];
+  const sheet = XLSX.utils.aoa_to_sheet([["Nombre", "Apellido", "Documento", "Correo", "Resultado"],
+    ["Ana", "Pérez", "32123456", "ana@ejemplo.com", "Apto"]]);
+  sheet["!cols"] = [{ wch: 22 }, { wch: 22 }, { wch: 20 }, { wch: 30 }, { wch: 16 }];
   XLSX.utils.book_append_sheet(workbook, sheet, "Alumnos");
   XLSX.writeFile(workbook, "plantilla-alumnos.xlsx");
 }

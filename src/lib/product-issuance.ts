@@ -7,6 +7,82 @@ const courseInput = scope.extend({ courseId: z.uuid() });
 const issueInput = courseInput.extend({ templateId: z.uuid() });
 const publicInput = z.object({ publicId: z.uuid() });
 const revokeInput = scope.extend({ credentialId: z.uuid(), reason: z.string().trim().min(3).max(250) });
+const rosterInput = courseInput.extend({
+  page: z.coerce.number().int().min(1).max(10000).default(1),
+  search: z.string().trim().max(100).default(""),
+  outcome: z.enum(["all", "pending", "eligible", "not_eligible"]).default("all"),
+});
+const outcomeInput = courseInput.extend({
+  enrollmentId: z.uuid(), outcome: z.enum(["pending", "eligible", "not_eligible"]),
+});
+
+export async function getCourseRoster(sql: Sql, userId: string, input: z.infer<typeof rosterInput>) {
+  const courses = await sql<{ id: string; name: string; code: string }>`
+    select c.id, c.name, c.code from courses c
+    join institutions i on i.id = c.institution_id join memberships m on m.institution_id = i.id
+    where i.slug = ${input.slug} and i.status = 'active' and c.id = ${input.courseId} and m.user_id = ${userId}
+  `;
+  if (!courses.length) throw new Error("No tenés acceso a esta capacitación.");
+  const term = `%${input.search.replace(/[\\%_]/g, (character) => `\\${character}`)}%`;
+  const filter = input.outcome;
+  const count = await sql<{ total: number }>`
+    select count(*)::int as total from enrollments e
+    join courses c on c.id = e.course_id and c.institution_id = e.institution_id
+    join institutions i on i.id = e.institution_id
+    join memberships m on m.institution_id = e.institution_id
+    join students s on s.id = e.student_id and s.institution_id = e.institution_id
+    where c.id = ${input.courseId} and i.slug = ${input.slug} and m.user_id = ${userId}
+      and (${filter} = 'all' or e.outcome = ${filter})
+      and (${input.search} = '' or s.first_name ilike ${term} escape '\\'
+        or s.last_name ilike ${term} escape '\\' or s.document_number ilike ${term} escape '\\')
+  `;
+  const rows = await sql<{
+    id: string; student_id: string; first_name: string; last_name: string; document_number: string | null;
+    outcome: "pending" | "eligible" | "not_eligible"; credential_status: "issued" | "revoked" | null;
+  }>`
+    select e.id, s.id as student_id, s.first_name, s.last_name, s.document_number, e.outcome,
+      cr.status as credential_status
+    from enrollments e join courses c on c.id = e.course_id and c.institution_id = e.institution_id
+    join institutions i on i.id = e.institution_id
+    join memberships m on m.institution_id = e.institution_id
+    join students s on s.id = e.student_id and s.institution_id = e.institution_id
+    left join credentials cr on cr.institution_id = e.institution_id and cr.enrollment_id = e.id
+    where c.id = ${input.courseId} and i.slug = ${input.slug} and m.user_id = ${userId}
+      and (${filter} = 'all' or e.outcome = ${filter})
+      and (${input.search} = '' or s.first_name ilike ${term} escape '\\'
+        or s.last_name ilike ${term} escape '\\' or s.document_number ilike ${term} escape '\\')
+    order by s.last_name, s.first_name, e.id limit 50 offset ${(input.page - 1) * 50}
+  `;
+  return { course: courses[0], total: count[0].total, page: input.page, pageSize: 50, rows };
+}
+
+export async function updateEnrollmentOutcome(sql: Sql, userId: string, input: z.infer<typeof outcomeInput>) {
+  const rows = await sql<{ id: string; previous: string; outcome: string }>`
+    with permitted as (
+      select c.id, i.id as institution_id from courses c
+      join institutions i on i.id = c.institution_id join memberships m on m.institution_id = i.id
+      where i.slug = ${input.slug} and i.status = 'active' and c.id = ${input.courseId} and c.status = 'active'
+        and m.user_id = ${userId} and m.role in ('owner', 'admin', 'issuer')
+    ), previous as (
+      select e.id, e.outcome from enrollments e join permitted p
+        on p.institution_id = e.institution_id and p.id = e.course_id
+      where e.id = ${input.enrollmentId} and e.outcome <> ${input.outcome}
+        and not exists (select 1 from credentials cr where cr.institution_id = e.institution_id and cr.enrollment_id = e.id)
+      for update of e
+    ), changed as (
+      update enrollments e set outcome = ${input.outcome}
+      from previous p where e.id = p.id
+      returning e.id, e.institution_id, p.outcome as previous, e.outcome
+    ), audited as (
+      insert into audit_events (institution_id, actor_user_id, action, entity_type, entity_id, details)
+      select institution_id, ${userId}, 'enrollment.outcome_changed', 'enrollment', id,
+        jsonb_build_object('previous', previous, 'outcome', outcome) from changed
+    )
+    select id, previous, outcome from changed
+  `;
+  if (!rows.length) throw new Error("No se pudo cambiar la aptitud. Puede que ya se haya emitido una credencial.");
+  return rows[0];
+}
 
 export async function getIssuancePanel(sql: Sql, userId: string, slug: string) {
   const templates = await sql<{ id: string; name: string; version: number }>`
@@ -219,4 +295,20 @@ export const revokeCredential = createServerFn({ method: "POST" })
     const userId = await requireUser();
     const { getSql } = await import("./db");
     return revokeInstitutionCredential(await getSql(), userId, data);
+  });
+
+export const getInstitutionCourseRoster = createServerFn({ method: "GET" })
+  .validator((input: z.input<typeof rosterInput>) => rosterInput.parse(input))
+  .handler(async ({ data }) => {
+    const userId = await requireUser();
+    const { getSql } = await import("./db");
+    return getCourseRoster(await getSql(), userId, data);
+  });
+
+export const setEnrollmentOutcome = createServerFn({ method: "POST" })
+  .validator((input: z.input<typeof outcomeInput>) => outcomeInput.parse(input))
+  .handler(async ({ data }) => {
+    const userId = await requireUser();
+    const { getSql } = await import("./db");
+    return updateEnrollmentOutcome(await getSql(), userId, data);
   });

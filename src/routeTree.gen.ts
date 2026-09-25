@@ -22,6 +22,7 @@ import { Route as VerificarCodigoRouteImport } from './routes/verificar.$codigo'
 import { Route as AdminCertificadosIndexRouteImport } from './routes/admin.certificados.index'
 import { Route as AdminCertificadosCodigoRouteImport } from './routes/admin.certificados.$codigo'
 import { Route as ProductoVerificarPublicIdRouteImport } from './routes/producto.verificar.$publicId'
+import { Route as ProductoSlugCursoCourseIdRouteImport } from './routes/producto.$slug.curso.$courseId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -89,13 +90,19 @@ const ProductoVerificarPublicIdRoute =
     path: '/producto/verificar/$publicId',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ProductoSlugCursoCourseIdRoute =
+  ProductoSlugCursoCourseIdRouteImport.update({
+    id: '/curso/$courseId',
+    path: '/curso/$courseId',
+    getParentRoute: () => ProductoSlugRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
   '/verificar': typeof VerificarRouteWithChildren
   '/admin/login': typeof AdminLoginRoute
-  '/producto/$slug': typeof ProductoSlugRoute
+  '/producto/$slug': typeof ProductoSlugRouteWithChildren
   '/producto/login': typeof ProductoLoginRoute
   '/verificar/$codigo': typeof VerificarCodigoRoute
   '/admin/': typeof AdminIndexRoute
@@ -104,11 +111,12 @@ export interface FileRoutesByFullPath {
   '/admin/certificados/$codigo': typeof AdminCertificadosCodigoRoute
   '/producto/verificar/$publicId': typeof ProductoVerificarPublicIdRoute
   '/admin/certificados/': typeof AdminCertificadosIndexRoute
+  '/producto/$slug/curso/$courseId': typeof ProductoSlugCursoCourseIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin/login': typeof AdminLoginRoute
-  '/producto/$slug': typeof ProductoSlugRoute
+  '/producto/$slug': typeof ProductoSlugRouteWithChildren
   '/producto/login': typeof ProductoLoginRoute
   '/verificar/$codigo': typeof VerificarCodigoRoute
   '/admin': typeof AdminIndexRoute
@@ -117,6 +125,7 @@ export interface FileRoutesByTo {
   '/admin/certificados/$codigo': typeof AdminCertificadosCodigoRoute
   '/producto/verificar/$publicId': typeof ProductoVerificarPublicIdRoute
   '/admin/certificados': typeof AdminCertificadosIndexRoute
+  '/producto/$slug/curso/$courseId': typeof ProductoSlugCursoCourseIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -124,7 +133,7 @@ export interface FileRoutesById {
   '/admin': typeof AdminRouteWithChildren
   '/verificar': typeof VerificarRouteWithChildren
   '/admin/login': typeof AdminLoginRoute
-  '/producto/$slug': typeof ProductoSlugRoute
+  '/producto/$slug': typeof ProductoSlugRouteWithChildren
   '/producto/login': typeof ProductoLoginRoute
   '/verificar/$codigo': typeof VerificarCodigoRoute
   '/admin/': typeof AdminIndexRoute
@@ -133,6 +142,7 @@ export interface FileRoutesById {
   '/admin/certificados/$codigo': typeof AdminCertificadosCodigoRoute
   '/producto/verificar/$publicId': typeof ProductoVerificarPublicIdRoute
   '/admin/certificados/': typeof AdminCertificadosIndexRoute
+  '/producto/$slug/curso/$courseId': typeof ProductoSlugCursoCourseIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -150,6 +160,7 @@ export interface FileRouteTypes {
     | '/admin/certificados/$codigo'
     | '/producto/verificar/$publicId'
     | '/admin/certificados/'
+    | '/producto/$slug/curso/$courseId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -163,6 +174,7 @@ export interface FileRouteTypes {
     | '/admin/certificados/$codigo'
     | '/producto/verificar/$publicId'
     | '/admin/certificados'
+    | '/producto/$slug/curso/$courseId'
   id:
     | '__root__'
     | '/'
@@ -178,13 +190,14 @@ export interface FileRouteTypes {
     | '/admin/certificados/$codigo'
     | '/producto/verificar/$publicId'
     | '/admin/certificados/'
+    | '/producto/$slug/curso/$courseId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRouteWithChildren
   VerificarRoute: typeof VerificarRouteWithChildren
-  ProductoSlugRoute: typeof ProductoSlugRoute
+  ProductoSlugRoute: typeof ProductoSlugRouteWithChildren
   ProductoLoginRoute: typeof ProductoLoginRoute
   ProductoIndexRoute: typeof ProductoIndexRoute
   ProductoVerificarPublicIdRoute: typeof ProductoVerificarPublicIdRoute
@@ -283,6 +296,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProductoVerificarPublicIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/producto/$slug/curso/$courseId': {
+      id: '/producto/$slug/curso/$courseId'
+      path: '/curso/$courseId'
+      fullPath: '/producto/$slug/curso/$courseId'
+      preLoaderRoute: typeof ProductoSlugCursoCourseIdRouteImport
+      parentRoute: typeof ProductoSlugRoute
+    }
   }
 }
 
@@ -316,11 +336,23 @@ const VerificarRouteWithChildren = VerificarRoute._addFileChildren(
   VerificarRouteChildren,
 )
 
+interface ProductoSlugRouteChildren {
+  ProductoSlugCursoCourseIdRoute: typeof ProductoSlugCursoCourseIdRoute
+}
+
+const ProductoSlugRouteChildren: ProductoSlugRouteChildren = {
+  ProductoSlugCursoCourseIdRoute: ProductoSlugCursoCourseIdRoute,
+}
+
+const ProductoSlugRouteWithChildren = ProductoSlugRoute._addFileChildren(
+  ProductoSlugRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRouteWithChildren,
   VerificarRoute: VerificarRouteWithChildren,
-  ProductoSlugRoute: ProductoSlugRoute,
+  ProductoSlugRoute: ProductoSlugRouteWithChildren,
   ProductoLoginRoute: ProductoLoginRoute,
   ProductoIndexRoute: ProductoIndexRoute,
   ProductoVerificarPublicIdRoute: ProductoVerificarPublicIdRoute,

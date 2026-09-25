@@ -55,6 +55,19 @@ test("800 student rows import atomically in one institution and retries do not d
     const mismatched = { ...input, rows: [{ ...input.rows[0], firstName: "Otra" }] };
     assert.equal((await previewStudentImport(sql, "issuer", mismatched)).valid, false);
     await assert.rejects(commitStudentImport(sql, "issuer", mismatched), /errores/);
+    const assessed = { ...input, rows: [
+      { rowNumber: 2, firstName: "Eva", lastName: "Apta", documentNumber: "40000001", email: "", outcome: "eligible" },
+      { rowNumber: 3, firstName: "Eva", lastName: "Excluida", documentNumber: "40000002", email: "", outcome: "not_eligible" },
+      { rowNumber: 4, firstName: "Eva", lastName: "Pendiente", documentNumber: "40000003", email: "" },
+    ] };
+    const assessedPreview = await previewStudentImport(sql, "issuer", assessed);
+    assert.equal(assessedPreview.readyInFile, 1);
+    assert.equal(assessedPreview.excludedInFile, 1);
+    assert.equal((await commitStudentImport(sql, "issuer", assessed)).enrolled, 3);
+    const outcomes = await db.query(`select e.outcome from enrollments e join students s on s.id = e.student_id
+      where s.document_number like '4000000%' order by s.document_number`);
+    assert.deepEqual(outcomes.rows.map((row) => row.outcome), ["eligible", "not_eligible", "pending"]);
+    assert.equal((await previewStudentImport(sql, "issuer", { ...assessed, rows: [{ ...assessed.rows[0], outcome: "not_eligible" }] })).valid, false);
   } finally {
     await db.close();
   }

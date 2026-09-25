@@ -29,17 +29,25 @@ estas variables en el repositorio. Las credenciales existentes no se importan.
 
 El panel permite asociar manualmente alumnos existentes a capacitaciones
 activas. También acepta archivos Excel/CSV con columnas Nombre, Apellido,
-Documento (o DNI) y Correo opcional, hasta 1000 filas o 2 MB. Descarga una
+Documento (o DNI), Correo opcional y Resultado opcional, hasta 1000 filas o 2 MB. Descarga una
 plantilla propia del producto. La vista previa detecta documentos repetidos en
 el archivo, alumnos ya inscritos y documentos que figuran con otro nombre.
-Al confirmar, el servidor repite la validación y guarda alumnos e inscripciones
-en una sola sentencia; una segunda carga no duplica inscripciones. La carga
+Resultado admite `Apto`, `No apto` o `Pendiente`; si falta, los alumnos quedan
+pendientes. La vista previa rechaza un resultado distinto para alguien ya
+inscripto: se corrige en la ficha del curso. Al confirmar, el servidor repite
+la validación y guarda alumnos e inscripciones en una sola sentencia; una segunda
+carga no duplica inscripciones. La carga
 de alumnos no emite certificados ni reserva códigos. El campo Documento es
 obligatorio en la importación, y debe conservarse como texto si tiene ceros
 iniciales. No hay registro público ni datos de ejemplo.
 
-La pestaña Credenciales permite aprobar expresamente a los alumnos pendientes
-de un curso y emitir hasta 1000 credenciales por lote. Una sola sentencia SQL
+Cada capacitación tiene una ficha de alumnos con búsqueda, filtro y páginas de
+50. Los emisores pueden marcar a cada alumno como apto, no apto o pendiente,
+con auditoría del cambio anterior y el nuevo. Una credencial emitida bloquea
+cambios posteriores de aptitud; su revocación es un proceso separado. La
+aprobación general solo cambia los pendientes, por lo que preserva las exclusiones
+individuales. La pestaña Credenciales permite emitir hasta 1000 credenciales
+aptas por lote. Una sola sentencia SQL
 reserva códigos correlativos y registra lote, filas, credenciales y auditoría;
 una restricción única impide una segunda credencial por inscripción. Cada QR
 conduce a `/producto/verificar/:publicId`, cuya página muestra el estado vigente
@@ -118,7 +126,7 @@ probar aislamiento entre instituciones antes de dar acceso a clientes.
    un repositorio propio y una base nueva.
 2. Implementar registro de instituciones y alta administrativa controlada.
 3. Completar búsqueda y edición de cursos y alumnos con aislamiento probado.
-4. Agregar selección de aptitud por alumno y plantillas visuales configurables.
+4. Agregar plantillas visuales configurables y branding de cada institución.
 5. Incorporar PDF en segundo plano, ZIP, estadísticas y piloto con dos
    instituciones de prueba.
 

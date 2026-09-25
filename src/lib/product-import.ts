@@ -8,6 +8,7 @@ const rowSchema = z.object({
   lastName: z.string().trim().min(1).max(100),
   documentNumber: z.string().trim().min(1).max(40).transform((value) => value.replace(/[^a-zA-Z0-9]/g, "").toUpperCase()).pipe(z.string().min(3).max(40)),
   email: z.union([z.email().max(254), z.literal("")]),
+  outcome: z.enum(["pending", "eligible", "not_eligible"]).optional(),
 });
 const importSchema = z.object({
   slug: z.string().trim().toLowerCase().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/),
@@ -36,8 +37,10 @@ export async function previewStudentImport(sql: Sql, userId: string, input: Vali
   }
   const existing = await sql<{
     document_number: string; first_name: string; last_name: string; already_enrolled: boolean;
+    existing_outcome: "pending" | "eligible" | "not_eligible" | null;
   }>`
-    select s.document_number, s.first_name, s.last_name, (e.id is not null) as already_enrolled
+    select s.document_number, s.first_name, s.last_name, (e.id is not null) as already_enrolled,
+      e.outcome as existing_outcome
     from students s left join enrollments e on e.institution_id = s.institution_id
       and e.student_id = s.id and e.course_id = ${input.courseId}
     where s.institution_id = ${courses[0].institution_id}
@@ -49,6 +52,9 @@ export async function previewStudentImport(sql: Sql, userId: string, input: Vali
     const found = existingByDocument.get(row.documentNumber);
     if (!found) continue;
     if (found.already_enrolled) alreadyEnrolled++;
+    if (found.already_enrolled && row.outcome && row.outcome !== found.existing_outcome) {
+      problems.push({ rowNumber: row.rowNumber, problem: "Ya está inscripto con otro resultado; cambialo desde la ficha del curso." });
+    }
     if (found.first_name.trim().toLocaleLowerCase() !== row.firstName.toLocaleLowerCase()
       || found.last_name.trim().toLocaleLowerCase() !== row.lastName.toLocaleLowerCase()) {
       problems.push({ rowNumber: row.rowNumber, problem: "Este documento pertenece a un alumno con otro nombre en la institución." });
@@ -59,6 +65,8 @@ export async function previewStudentImport(sql: Sql, userId: string, input: Vali
     total: input.rows.length,
     existingStudents: existing.length,
     alreadyEnrolled,
+    readyInFile: input.rows.filter((row) => row.outcome === "eligible").length,
+    excludedInFile: input.rows.filter((row) => row.outcome === "not_eligible").length,
     problems,
     valid: problems.length === 0,
   };
@@ -79,7 +87,7 @@ export async function commitStudentImport(sql: Sql, userId: string, input: Valid
         and m.user_id = ${userId} and m.role in ('owner', 'admin', 'issuer')
     ), data as (
       select x.* from jsonb_to_recordset(${JSON.stringify(input.rows)}::jsonb)
-        as x("firstName" text, "lastName" text, "documentNumber" text, email text)
+        as x("firstName" text, "lastName" text, "documentNumber" text, email text, outcome text)
     ), saved as (
       insert into students (institution_id, first_name, last_name, document_number, email)
       select p.institution_id, d."firstName", d."lastName", d."documentNumber", nullif(d.email, '')
@@ -88,8 +96,10 @@ export async function commitStudentImport(sql: Sql, userId: string, input: Valid
         do update set document_number = excluded.document_number
       returning id, institution_id, document_number
     ), enrolled as (
-      insert into enrollments (institution_id, course_id, student_id)
-      select s.institution_id, p.course_id, s.id from saved s join permitted p on p.institution_id = s.institution_id
+      insert into enrollments (institution_id, course_id, student_id, outcome)
+      select s.institution_id, p.course_id, s.id, coalesce(d.outcome, 'pending')
+      from saved s join permitted p on p.institution_id = s.institution_id
+        join data d on d."documentNumber" = s.document_number
       on conflict (institution_id, course_id, student_id) do nothing
       returning id, institution_id
     ), audited as (

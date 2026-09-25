@@ -210,7 +210,8 @@ function InstitutionPanel() {
           </form>}
           {courses.length ? <div className="mt-5 overflow-hidden rounded-xl border border-border">
             {courses.map((course) => <div key={course.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-surface p-5 last:border-0">
-              <div><p className="font-semibold">{course.name}</p><p className="mt-1 text-sm text-muted">{course.code} · {course.hours} horas · {course.period}</p></div>
+              <div><p className="font-semibold">{course.name}</p><p className="mt-1 text-sm text-muted">{course.code} · {course.hours} horas · {course.period}</p>
+                <Link to="/producto/$slug/curso/$courseId" params={{ slug: institution.slug, courseId: course.id }} search={{ q: "", page: 1, outcome: "all" }} className="mt-2 inline-block text-sm text-primary hover:underline">Ver alumnos y aptitud →</Link></div>
               <span className="text-xs uppercase text-muted">{course.status === "active" ? "Activa" : "Archivada"}</span>
             </div>)}
           </div> : <p className="mt-5 rounded-xl border border-border bg-surface p-6 text-muted">Todavía no hay capacitaciones cargadas.</p>}
@@ -218,7 +219,7 @@ function InstitutionPanel() {
           <h2 className="mt-8 text-2xl font-semibold">Alumnos</h2>
           {canManageStudents && <div className="mt-5 rounded-xl border border-border bg-surface p-6">
             <h3 className="text-lg font-semibold">Importar alumnos de Excel o CSV</h3>
-            <p className="mt-2 text-sm text-muted">Elegí una capacitación, cargá hasta 1000 alumnos y revisá la lista antes de confirmar. Importar no emite certificados.</p>
+            <p className="mt-2 text-sm text-muted">Elegí una capacitación y cargá hasta 1000 alumnos. La columna opcional Resultado admite Apto, No apto o Pendiente; sin ella, todos quedan pendientes. Importar no emite certificados.</p>
             <button type="button" onClick={() => void downloadStudentTemplate()} className="mt-3 text-sm font-semibold text-primary hover:underline">Descargar plantilla de ejemplo</button>
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <label className={labelClass}>Capacitación
@@ -240,6 +241,7 @@ function InstitutionPanel() {
             {importPreview && <div className="mt-5 rounded-lg border border-border bg-bg p-4 text-sm">
               <p className="font-semibold">Vista previa: {importPreview.courseName} · {importPreview.total} alumnos</p>
               <p className="mt-2 text-muted">{importPreview.existingStudents} ya figuran en la institución; {importPreview.alreadyEnrolled} ya están inscriptos en este curso.</p>
+              <p className="mt-2 text-muted">Según el archivo: {importPreview.readyInFile} aptos · {importPreview.excludedInFile} no aptos · {importPreview.total - importPreview.readyInFile - importPreview.excludedInFile} pendientes.</p>
               {importPreview.problems.length > 0 && <ul className="mt-3 list-inside list-disc text-red-400">
                 {importPreview.problems.slice(0, 15).map((problem, index) => <li key={`${problem.rowNumber}-${index}`}>Fila {problem.rowNumber}: {problem.problem}</li>)}
                 {importPreview.problems.length > 15 && <li>Hay {importPreview.problems.length - 15} errores adicionales.</li>}
@@ -283,7 +285,7 @@ function InstitutionPanel() {
           <h2 className="mt-8 text-2xl font-semibold">Emisión y credenciales</h2>
           {canManageStudents && <div className="mt-5 rounded-xl border border-border bg-surface p-6">
             <h3 className="text-lg font-semibold">Emitir credenciales</h3>
-            <p className="mt-2 text-sm text-muted">Primero aprobá a quienes completaron la capacitación. Emitir crea códigos y QR verificables; podés descargar el PDF de cada credencial.</p>
+            <p className="mt-2 text-sm text-muted">Revisá la aptitud de los alumnos en cada capacitación. La aprobación general marca como aptos solo a los que siguen pendientes; respeta a quienes marcaste como no aptos.</p>
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <label className={labelClass}>Capacitación<select className={inputClass} value={issueCourseId} onChange={(event) => { setIssueCourseId(event.target.value); setIssueMessage(""); }}>
                 <option value="">Elegir capacitación</option>
@@ -298,7 +300,8 @@ function InstitutionPanel() {
             {issueError && <p role="alert" className="mt-4 text-sm text-red-400">{issueError}</p>}
             {issueMessage && <p role="status" className="mt-4 text-sm text-primary">{issueMessage}</p>}
             <div className="mt-5 flex flex-wrap gap-3">
-              <button type="button" disabled={issueBusy || !issueCourseId || !(issuance.courses.find((course) => course.id === issueCourseId)?.pending)} onClick={() => void approveStudents()} className="rounded-lg border border-border px-5 py-3 font-semibold disabled:opacity-50">Marcar pendientes como aptos</button>
+              {issueCourseId && <Link to="/producto/$slug/curso/$courseId" params={{ slug: institution.slug, courseId: issueCourseId }} search={{ q: "", page: 1, outcome: "all" }} className="rounded-lg border border-border px-5 py-3 font-semibold hover:border-primary">Revisar alumnos</Link>}
+              <button type="button" disabled={issueBusy || !issueCourseId || !(issuance.courses.find((course) => course.id === issueCourseId)?.pending)} onClick={() => void approveStudents()} className="rounded-lg border border-border px-5 py-3 font-semibold disabled:opacity-50">Aprobar todos los pendientes</button>
               <button type="button" disabled={issueBusy || !issueCourseId || !issueTemplateId || !(issuance.courses.find((course) => course.id === issueCourseId)?.eligible)} onClick={() => void emitCredentials()} className="rounded-lg bg-primary px-5 py-3 font-semibold text-primary-fg disabled:opacity-50">{issueBusy ? "Procesando…" : "Emitir hasta 1000 credenciales"}</button>
             </div>
           </div>}
