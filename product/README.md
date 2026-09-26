@@ -66,6 +66,24 @@ privado de PDFs, los trabajos de generación en segundo plano y el ZIP masivo
 siguen pendientes. No usar esta implementación como piloto público hasta revisar
 políticas de acceso, disponibilidad y experiencia visual en un navegador real.
 
+## Demo aislada en Netlify
+
+Crear **otro sitio** en Netlify conectado al repositorio `Carito-lw/certificaciones`,
+con `feat/saas-foundation` como rama de producción. El archivo `netlify.toml`
+selecciona `npm run build:product` únicamente para esa rama. Crear un proyecto
+Supabase nuevo, con base vacía: nunca apuntar a la base de Breakpoint.
+
+Configurar en **el sitio nuevo** estas variables tanto para la compilación como
+para las funciones: `SAAS_DATABASE_URL` (cadena PostgreSQL privada del proyecto
+nuevo), `PRODUCT_MODE=saas`, `BETTER_AUTH_SECRET` (valor aleatorio de 32 caracteres
+como mínimo), `BETTER_AUTH_URL` y `SAAS_PUBLIC_BASE_URL` (ambas iguales a la URL
+HTTPS de ese sitio, sin barra final). Mantener esos secretos fuera del repositorio.
+El build detiene la publicación si falta alguna configuración; al compilar aplica
+las migraciones solo a `SAAS_DATABASE_URL`. Después de publicar, crear una
+institución de prueba con `npm run institution:create` usando esa misma base y
+una contraseña temporal provista por `SAAS_BOOTSTRAP_PASSWORD`; entrar en
+`/producto/login`. No introducir alumnos reales en esta demo preliminar.
+
 ## Decisiones del MVP
 
 - Cada institución tiene su marca, administradores, cursos, alumnos, plantillas,

@@ -5,6 +5,10 @@
 [build.environment]
   NODE_VERSION = "20"
 
+# Build the independent SaaS only when deploying its dedicated branch.
+[context."feat/saas-foundation"]
+  command = "npm run build:product"
+
 [[redirects]]
   from = "/*"
   to = "/.netlify/functions/server"
@@ -13,4 +17,3 @@
 
 [functions]
   included_files = ["public/**"]
-
