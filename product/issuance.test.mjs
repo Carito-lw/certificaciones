@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
-import { getIssuancePanel, issueCourseBatch, lookupPublicCredential, markCourseEligible, revokeInstitutionCredential } from "../src/lib/product-issuance.ts";
+import { createTemplateVersion, getIssuancePanel, issueCourseBatch, lookupPublicCredential, markCourseEligible, revokeInstitutionCredential } from "../src/lib/product-issuance.ts";
 import { getAuthorizedPdfData, renderInstitutionPdf } from "../src/lib/product-pdf.ts";
 
 test("issue 800 unique credentials, verify publicly, and revoke with tenant roles", async () => {
@@ -35,10 +35,25 @@ test("issue 800 unique credentials, verify publicly, and revoke with tenant role
       for (let i = 0; i < values.length; i++) statement += `$${i + 1}${strings[i + 1]}`;
       return db.query(statement, values).then((result) => result.rows);
     };
+    const configuration = {
+      accentColor: "#17658C", title: "CERTIFICADO MUNICIPAL", introduction: "Se deja constancia de que",
+      accomplishment: "aprobó satisfactoriamente la formación", footer: "Municipalidad de ejemplo",
+    };
+    const settings = { slug: "city", name: "Institucional", basedOnId: template.rows[0].id, configuration };
+    await assert.rejects(createTemplateVersion(sql, "issuer", settings), /No tenés permiso/);
+    await assert.rejects(createTemplateVersion(sql, "outsider", settings), /No tenés permiso/);
+    const versionTwo = await createTemplateVersion(sql, "owner", settings);
+    assert.equal(versionTwo.version, 2);
+    await assert.rejects(createTemplateVersion(sql, "outsider", { ...settings, slug: "school" }), /No tenés permiso/);
+    const schoolTemplate = await createTemplateVersion(sql, "outsider", { slug: "school", name: "Institucional", configuration });
+    assert.equal(schoolTemplate.version, 1);
+    assert.equal((await getIssuancePanel(sql, "outsider", "school")).templates.length, 1);
+    await assert.rejects(createTemplateVersion(sql, "owner", { ...settings, basedOnId: undefined }), /Ya existe/);
+    assert.equal((await getIssuancePanel(sql, "owner", "city")).templates[0].configuration.title, configuration.title);
     assert.equal((await getIssuancePanel(sql, "issuer", "city")).courses[0].pending, 800);
     assert.equal((await markCourseEligible(sql, "issuer", "city", course.rows[0].id)).marked, 800);
     assert.equal((await markCourseEligible(sql, "issuer", "city", course.rows[0].id)).marked, 0);
-    const request = { slug: "city", courseId: course.rows[0].id, templateId: template.rows[0].id };
+    const request = { slug: "city", courseId: course.rows[0].id, templateId: versionTwo.id };
     await assert.rejects(issueCourseBatch(sql, "outsider", request), /No hay alumnos/);
     const issued = await issueCourseBatch(sql, "issuer", request);
     assert.equal(issued.issued, 800);
@@ -46,6 +61,14 @@ test("issue 800 unique credentials, verify publicly, and revoke with tenant role
     const saved = await db.query("select id, public_id, display_code, status from credentials order by display_code");
     assert.equal(saved.rows.length, 800);
     assert.equal(new Set(saved.rows.map((row) => row.display_code)).size, 800);
+    const frozen = await db.query("select snapshot from credentials where id = $1", [saved.rows[0].id]);
+    assert.equal(frozen.rows[0].snapshot.templateVersion, 2);
+    assert.equal(frozen.rows[0].snapshot.templateConfiguration.title, configuration.title);
+    const versionThree = await createTemplateVersion(sql, "owner", { ...settings, basedOnId: versionTwo.id,
+      configuration: { ...configuration, title: "SEGUNDA VERSIÓN" } });
+    assert.equal(versionThree.version, 3);
+    const old = await db.query("select snapshot from credentials where id = $1", [saved.rows[0].id]);
+    assert.equal(old.rows[0].snapshot.templateConfiguration.title, configuration.title);
     assert.match(saved.rows[0].display_code, /^CI-INFO-\d{4}-000001$/);
     const result = await lookupPublicCredential(sql, saved.rows[0].public_id);
     assert.equal(result.status, "issued");

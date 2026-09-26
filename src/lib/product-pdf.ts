@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type { Sql } from "./db";
+import { readTemplateConfiguration, type TemplateConfiguration } from "./product-template.ts";
 
 const inputSchema = z.object({
   slug: z.string().trim().toLowerCase().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/),
@@ -11,7 +12,8 @@ export async function getAuthorizedPdfData(sql: Sql, userId: string, input: z.in
   const rows = await sql<{
     public_id: string; display_code: string; issued_at: string; status: string;
     snapshot: { studentName: string; institutionName: string; courseName: string;
-      hours: number; period: string; primaryColor: string | null };
+      hours: number; period: string; primaryColor: string | null;
+      templateConfiguration?: Partial<TemplateConfiguration> };
   }>`
     select cr.public_id, cr.display_code, cr.issued_at, cr.status, cr.snapshot
     from credentials cr join institutions i on i.id = cr.institution_id
@@ -37,26 +39,30 @@ export async function renderInstitutionPdf(data: PdfData, publicBaseUrl: string)
   const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4", compress: true });
   const width = pdf.internal.pageSize.getWidth();
   const height = pdf.internal.pageSize.getHeight();
-  const match = /^#[0-9a-fA-F]{6}$/.test(data.snapshot.primaryColor || "") ? data.snapshot.primaryColor! : "#2A5070";
+  const configuration = readTemplateConfiguration(data.snapshot.templateConfiguration);
+  const match = /^#[0-9a-fA-F]{6}$/.test(data.snapshot.templateConfiguration?.accentColor || "") ? configuration.accentColor :
+    (/^#[0-9a-fA-F]{6}$/.test(data.snapshot.primaryColor || "") ? data.snapshot.primaryColor! : configuration.accentColor);
   const rgb = [1, 3, 5].map((i) => Number.parseInt(match.slice(i, i + 2), 16)) as [number, number, number];
   pdf.setFillColor(...rgb); pdf.rect(0, 0, width, 12, "F");
   pdf.setFillColor(247, 248, 249); pdf.rect(0, 12, width, height - 12, "F");
   pdf.setDrawColor(...rgb); pdf.setLineWidth(0.7); pdf.rect(12, 22, width - 24, height - 34);
   pdf.setTextColor(...rgb); pdf.setFont("helvetica", "bold"); pdf.setFontSize(12);
   pdf.text(data.snapshot.institutionName, width / 2, 36, { align: "center", maxWidth: 230 });
-  pdf.setTextColor(30, 38, 50); pdf.setFontSize(24); pdf.text("CERTIFICADO", width / 2, 62, { align: "center" });
+  pdf.setTextColor(30, 38, 50); pdf.setFontSize(24);
+  pdf.text(pdf.splitTextToSize(configuration.title, 230).slice(0, 2), width / 2, 60, { align: "center" });
   pdf.setFont("helvetica", "normal"); pdf.setFontSize(12);
-  pdf.text("Se certifica que", width / 2, 78, { align: "center" });
+  pdf.text(pdf.splitTextToSize(configuration.introduction, 235).slice(0, 2), width / 2, 77, { align: "center" });
   pdf.setFont("helvetica", "bold"); pdf.setFontSize(22);
   pdf.text(data.snapshot.studentName, width / 2, 93, { align: "center", maxWidth: 236 });
   pdf.setFont("helvetica", "normal"); pdf.setFontSize(12);
-  pdf.text("participó y cumplió los requisitos de la capacitación", width / 2, 108, { align: "center" });
+  pdf.text(pdf.splitTextToSize(configuration.accomplishment, 228).slice(0, 2), width / 2, 108, { align: "center" });
   pdf.setFont("helvetica", "bold"); pdf.setFontSize(16);
   const courseLines = pdf.splitTextToSize(data.snapshot.courseName, 190).slice(0, 3);
   pdf.text(courseLines, width / 2, 122, { align: "center" });
   pdf.setFont("helvetica", "normal"); pdf.setFontSize(11);
   pdf.text(`${data.snapshot.hours} horas · ${data.snapshot.period}`, width / 2, 148, { align: "center", maxWidth: 220 });
   pdf.setFontSize(9); pdf.setTextColor(65, 70, 78);
+  if (configuration.footer) pdf.text(pdf.splitTextToSize(configuration.footer, 185).slice(0, 2), 24, 163);
   pdf.text(`Código: ${data.display_code}`, 24, 177);
   pdf.text(`Emisión: ${new Date(data.issued_at).toLocaleDateString("es-AR", { timeZone: "UTC" })}`, 24, 184);
   const matrix = encodeQrMatrix(verificationUrl, "M");

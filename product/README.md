@@ -55,10 +55,13 @@ o revocado, sin documento ni correo, y registra la visita. Propietarios y
 administradores pueden revocar con motivo obligatorio. Las descargas PDF
 individuales requieren pertenecer a la institución; para habilitarlas en un
 despliegue nuevo hay que definir `SAAS_PUBLIC_BASE_URL` con el origen HTTPS del
-producto, por ejemplo `https://credenciales.ejemplo.org`. El PDF usa una
-plantilla institucional básica y los datos congelados al emitir.
+producto, por ejemplo `https://credenciales.ejemplo.org`. En la pestaña
+Plantillas, propietarios y administradores configuran nombre, color, título,
+introducción, descripción y pie. Cada cambio crea una versión nueva. La emisión
+congela los datos de la capacitación y la configuración de esa versión en
+`credentials.snapshot`; los PDF anteriores conservan su diseño.
 
-La búsqueda, la edición, las plantillas visuales configurables, el almacenamiento
+La edición de alumnos/cursos, los logotipos y fondos de plantilla, el almacenamiento
 privado de PDFs, los trabajos de generación en segundo plano y el ZIP masivo
 siguen pendientes. No usar esta implementación como piloto público hasta revisar
 políticas de acceso, disponibilidad y experiencia visual en un navegador real.
@@ -126,7 +129,7 @@ probar aislamiento entre instituciones antes de dar acceso a clientes.
    un repositorio propio y una base nueva.
 2. Implementar registro de instituciones y alta administrativa controlada.
 3. Completar búsqueda y edición de cursos y alumnos con aislamiento probado.
-4. Agregar plantillas visuales configurables y branding de cada institución.
+4. Agregar logotipos y fondos mediante almacenamiento privado de assets.
 5. Incorporar PDF en segundo plano, ZIP, estadísticas y piloto con dos
    instituciones de prueba.
 

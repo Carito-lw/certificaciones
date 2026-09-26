@@ -6,6 +6,7 @@ import { downloadStudentTemplate, parseStudentSheet } from "@/lib/product-spread
 import { approveCourseStudents, getInstitutionIssuance, issueInstitutionBatch, revokeCredential } from "@/lib/product-issuance";
 import { downloadInstitutionPdf } from "@/lib/product-pdf";
 import { encodeQrMatrix, renderSvg } from "@/lib/certificates/qr";
+import { ProductTemplateEditor } from "@/components/product-template-editor";
 
 export const Route = createFileRoute("/producto/$slug")({
   loader: async ({ params }) => {
@@ -22,7 +23,7 @@ export const Route = createFileRoute("/producto/$slug")({
 function InstitutionPanel() {
   const { institution, courses, students, enrollments, issuance } = Route.useLoaderData();
   const router = useRouter();
-  const [tab, setTab] = useState<"courses" | "students" | "credentials">("courses");
+  const [tab, setTab] = useState<"courses" | "students" | "credentials" | "templates">("courses");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [importRows, setImportRows] = useState<ImportInput["rows"]>([]);
@@ -191,7 +192,7 @@ function InstitutionPanel() {
           ))}
         </div>
         <nav aria-label="Secciones de la institución" className="mt-12 flex gap-2 border-b border-border">
-          {([ ["courses", "Capacitaciones"], ["students", "Alumnos"], ["credentials", "Credenciales"] ] as const).map(([key, title]) => (
+          {([ ["courses", "Capacitaciones"], ["students", "Alumnos"], ["credentials", "Credenciales"], ["templates", "Plantillas"] ] as const).map(([key, title]) => (
             <button key={key} type="button" onClick={() => { setTab(key); setError(""); }}
               aria-current={tab === key ? "page" : undefined}
               className={`border-b-2 px-4 py-3 text-sm font-semibold ${tab === key ? "border-primary text-fg" : "border-transparent text-muted hover:text-fg"}`}>{title}</button>
@@ -281,7 +282,7 @@ function InstitutionPanel() {
             </div>)}
           </div> : <p className="mt-5 rounded-xl border border-border bg-surface p-6 text-muted">Todavía no hay alumnos cargados.</p>}
           {institution.studentCount > 100 && <p className="mt-4 text-sm text-muted">Mostrando los últimos 100 alumnos de {institution.studentCount}.</p>}
-        </section> : <section aria-label="Credenciales">
+        </section> : tab === "templates" ? <ProductTemplateEditor slug={institution.slug} templates={issuance.templates} canManage={canManageCourses} onSaved={() => router.invalidate()} /> : <section aria-label="Credenciales">
           <h2 className="mt-8 text-2xl font-semibold">Emisión y credenciales</h2>
           {canManageStudents && <div className="mt-5 rounded-xl border border-border bg-surface p-6">
             <h3 className="text-lg font-semibold">Emitir credenciales</h3>

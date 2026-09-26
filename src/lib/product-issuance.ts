@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type { Sql } from "./db";
+import { readTemplateConfiguration, templateConfigurationSchema } from "./product-template.ts";
 
 const scope = z.object({ slug: z.string().trim().toLowerCase().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/) });
 const courseInput = scope.extend({ courseId: z.uuid() });
@@ -15,6 +16,48 @@ const rosterInput = courseInput.extend({
 const outcomeInput = courseInput.extend({
   enrollmentId: z.uuid(), outcome: z.enum(["pending", "eligible", "not_eligible"]),
 });
+const templateInput = scope.extend({
+  name: z.string().trim().min(2).max(80),
+  basedOnId: z.uuid().optional(),
+  configuration: templateConfigurationSchema,
+});
+
+export async function createTemplateVersion(sql: Sql, userId: string, input: z.infer<typeof templateInput>) {
+  let rows: { id: string; version: number }[];
+  try {
+    rows = await sql<{ id: string; version: number }>`
+      with permitted as (
+        select i.id from institutions i join memberships m on m.institution_id = i.id
+        where i.slug = ${input.slug} and i.status = 'active'
+          and m.user_id = ${userId} and m.role in ('owner', 'admin')
+      ), source as (
+        select p.id as institution_id, coalesce(t.name, ${input.name}::text) as name,
+          case when ${input.basedOnId || null}::uuid is null then 1 else
+            (select coalesce(max(v.version), 0) + 1 from certificate_templates v
+             where v.institution_id = p.id and v.name = t.name) end as next_version
+        from permitted p left join certificate_templates t
+          on t.institution_id = p.id and t.id = ${input.basedOnId || null}::uuid
+        where ${input.basedOnId || null}::uuid is null or t.id is not null
+      ), created as (
+        insert into certificate_templates (institution_id, name, version, configuration)
+        select institution_id, name, next_version, ${JSON.stringify(input.configuration)}::jsonb from source
+        returning id, institution_id, name, version
+      ), audited as (
+        insert into audit_events (institution_id, actor_user_id, action, entity_type, entity_id, details)
+        select institution_id, ${userId}, 'template.version_created', 'template', id,
+          jsonb_build_object('name', name, 'version', version) from created
+      )
+      select id, version from created
+    `;
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "23505") {
+      throw new Error("Ya existe una plantilla con ese nombre y versión. Elegí otro nombre o actualizá la lista.");
+    }
+    throw error;
+  }
+  if (!rows.length) throw new Error("No tenés permiso para configurar plantillas en esta institución.");
+  return rows[0];
+}
 
 export async function getCourseRoster(sql: Sql, userId: string, input: z.infer<typeof rosterInput>) {
   const courses = await sql<{ id: string; name: string; code: string }>`
@@ -85,13 +128,14 @@ export async function updateEnrollmentOutcome(sql: Sql, userId: string, input: z
 }
 
 export async function getIssuancePanel(sql: Sql, userId: string, slug: string) {
-  const templates = await sql<{ id: string; name: string; version: number }>`
-    select t.id, t.name, t.version from certificate_templates t
+  const templateRows = await sql<{ id: string; name: string; version: number; configuration: unknown }>`
+    select t.id, t.name, t.version, t.configuration from certificate_templates t
     join institutions i on i.id = t.institution_id
     join memberships m on m.institution_id = i.id
     where i.slug = ${slug} and i.status = 'active' and m.user_id = ${userId}
     order by t.name, t.version desc
   `;
+  const templates = templateRows.map((row) => ({ ...row, configuration: readTemplateConfiguration(row.configuration) }));
   const courses = await sql<{ id: string; eligible: number; pending: number }>`
     select c.id,
       count(e.id) filter (where e.outcome = 'eligible' and cr.id is null)::int as eligible,
@@ -151,7 +195,8 @@ export async function issueCourseBatch(sql: Sql, userId: string, input: z.infer<
     with permitted as (
       select c.id as course_id, c.code as course_code, c.name as course_name, c.hours, c.period,
         i.id as institution_id, i.name as institution_name, i.code_prefix, i.primary_color,
-        t.id as template_id, t.name as template_name, t.version as template_version
+        t.id as template_id, t.name as template_name, t.version as template_version,
+        t.configuration as template_configuration
       from courses c join institutions i on i.id = c.institution_id
       join memberships m on m.institution_id = i.id
       join certificate_templates t on t.institution_id = i.id and t.id = ${input.templateId}
@@ -196,8 +241,10 @@ export async function issueCourseBatch(sql: Sql, userId: string, input: z.infer<
           lpad((r.next_number - total.amount + item.row_number - 1)::text, 6, '0'),
         jsonb_build_object('studentName', e.first_name || ' ' || e.last_name,
           'institutionName', p.institution_name, 'courseName', p.course_name,
-          'hours', p.hours, 'period', p.period, 'primaryColor', p.primary_color,
-          'templateName', p.template_name, 'templateVersion', p.template_version)
+          'hours', p.hours, 'period', p.period,
+          'primaryColor', coalesce(p.template_configuration->>'accentColor', p.primary_color),
+          'templateName', p.template_name, 'templateVersion', p.template_version,
+          'templateConfiguration', p.template_configuration)
       from items item join eligible e on e.enrollment_id = item.enrollment_id
       join permitted p on p.institution_id = item.institution_id
       cross join reserved r cross join total
@@ -311,4 +358,12 @@ export const setEnrollmentOutcome = createServerFn({ method: "POST" })
     const userId = await requireUser();
     const { getSql } = await import("./db");
     return updateEnrollmentOutcome(await getSql(), userId, data);
+  });
+
+export const saveInstitutionTemplate = createServerFn({ method: "POST" })
+  .validator((input: z.input<typeof templateInput>) => templateInput.parse(input))
+  .handler(async ({ data }) => {
+    const userId = await requireUser();
+    const { getSql } = await import("./db");
+    return createTemplateVersion(await getSql(), userId, data);
   });
