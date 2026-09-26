@@ -227,6 +227,8 @@ function authApiPlugin(): Plugin {
 // The dev server starts once `src/router.tsx` and `src/routes/` exist — see
 // AGENTS.md § "First scaffold".
 export default defineConfig(({ command, isPreview }) => ({
+  // Product builds must not publish static assets from the legacy institution.
+  publicDir: process.env.VITE_PRODUCT_MODE === "saas" ? false : "public",
   server: {
     host: "0.0.0.0",
     port: 8080,
@@ -253,6 +255,11 @@ export default defineConfig(({ command, isPreview }) => ({
       ? [
           nitro({
             preset: "netlify",
+            // Nitro scans /public separately from Vite; exclude institutional
+            // assets from the SaaS site's public output as well.
+            ...(process.env.VITE_PRODUCT_MODE === "saas"
+              ? { publicAssets: [{ dir: "public", ignore: ["**"] }] }
+              : {}),
             // Auto-registers server/middleware/* (the PWA install page +
             // manifest + head-tag middleware). Nitro v3 defaults serverDir to
             // false, so removing this silently unwires /?install=1 on deploys.
