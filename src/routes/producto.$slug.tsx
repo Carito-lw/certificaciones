@@ -296,9 +296,10 @@ function InstitutionPanel() {
               </select></label>
               <label className={labelClass}>Plantilla<select className={inputClass} value={issueTemplateId} onChange={(event) => setIssueTemplateId(event.target.value)}>
                 <option value="">Elegir plantilla</option>
-                {issuance.templates.map((template) => <option key={template.id} value={template.id}>{template.name} · versión {template.version}</option>)}
+                {issuance.templates.filter((template) => template.has_signature).map((template) => <option key={template.id} value={template.id}>{template.name} · versión {template.version}</option>)}
               </select></label>
             </div>
+            {!issuance.templates.some((template) => template.has_signature) && <p className="mt-4 text-sm text-muted">Primero configurá una plantilla con al menos una firma autorizada en la sección Plantillas.</p>}
             {issueCourseId && <p className="mt-4 text-sm text-muted">{issuance.courses.find((course) => course.id === issueCourseId)?.pending ?? 0} pendientes de aprobación · {issuance.courses.find((course) => course.id === issueCourseId)?.eligible ?? 0} aptos para emitir</p>}
             {issueError && <p role="alert" className="mt-4 text-sm text-red-400">{issueError}</p>}
             {issueMessage && <p role="status" className="mt-4 text-sm text-primary">{issueMessage}</p>}

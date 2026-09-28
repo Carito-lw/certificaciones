@@ -61,7 +61,14 @@ individuales requieren pertenecer a la institución; para habilitarlas en un
 despliegue nuevo hay que definir `SAAS_PUBLIC_BASE_URL` con el origen HTTPS del
 producto, por ejemplo `https://credenciales.ejemplo.org`. En la pestaña
 Plantillas, propietarios y administradores configuran nombre, color, título,
-introducción, descripción y pie. Cada cambio crea una versión nueva. La emisión
+introducción, descripción, pie y hasta dos firmas institucionales autorizadas.
+Cada firma requiere imagen PNG/JPG de hasta 150 KB, nombre y cargo. El archivo
+queda privado y asociado a la versión de plantilla, y no aparece en la
+verificación pública. Una plantilla sin firma no permite emitir nuevas
+credenciales; al crear una versión desde otra con firma se conservan las firmas
+anteriores salvo que se carguen nuevas imágenes. Los certificados ya emitidos
+con versiones antiguas sin firma siguen sin ella: no se les inventa ni agrega
+una firma retrospectivamente. Cada cambio crea una versión nueva. La emisión
 congela los datos de la capacitación y la configuración de esa versión en
 `credentials.snapshot`; los PDF anteriores conservan su diseño.
 

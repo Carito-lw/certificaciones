@@ -2,7 +2,18 @@ import { useState, type FormEvent } from "react";
 import { saveInstitutionTemplate } from "@/lib/product-issuance";
 import { DEFAULT_TEMPLATE, type TemplateConfiguration } from "@/lib/product-template";
 
-type Template = { id: string; name: string; version: number; configuration: TemplateConfiguration };
+type Template = { id: string; name: string; version: number; configuration: TemplateConfiguration;
+  has_signature: boolean; signers: { slot: number; signerName: string; signerRole: string }[] };
+
+async function encodeSignature(file: File) {
+  if (!["image/png", "image/jpeg"].includes(file.type) || file.size < 64 || file.size > 150000) {
+    throw new Error("Elegí una firma PNG o JPG de hasta 150 KB, preferentemente con fondo transparente.");
+  }
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 8192) binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+  return btoa(binary);
+}
 
 export function ProductTemplateEditor({ slug, templates, canManage, onSaved }: {
   slug: string; templates: Template[]; canManage: boolean; onSaved: () => Promise<void>;
@@ -13,11 +24,19 @@ export function ProductTemplateEditor({ slug, templates, canManage, onSaved }: {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [signerName, setSignerName] = useState("");
+  const [signerRole, setSignerRole] = useState("");
+  const [signatureFile, setSignatureFile] = useState<File | null>(null);
+  const [secondName, setSecondName] = useState("");
+  const [secondRole, setSecondRole] = useState("");
+  const [secondFile, setSecondFile] = useState<File | null>(null);
 
   function choose(value: string) {
     const template = templates.find((item) => item.id === value);
     setSourceId(value); setName(template?.name || "");
     setConfig(template?.configuration || DEFAULT_TEMPLATE);
+    setSignerName(""); setSignerRole(""); setSignatureFile(null);
+    setSecondName(""); setSecondRole(""); setSecondFile(null);
     setError(""); setMessage("");
   }
 
@@ -28,8 +47,17 @@ export function ProductTemplateEditor({ slug, templates, canManage, onSaved }: {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setSaving(true); setError(""); setMessage("");
     try {
+      const source = templates.find((item) => item.id === sourceId);
+      if (!signatureFile && !source?.has_signature) throw new Error("Cargá una firma autorizada antes de guardar la plantilla.");
+      if (secondFile && !signatureFile) throw new Error("Cargá primero la firma principal.");
+      const signatures: { slot: 1 | 2; signerName: string; signerRole: string;
+        mimeType: "image/png" | "image/jpeg"; base64: string }[] = signatureFile ? [{ slot: 1, signerName, signerRole,
+        mimeType: signatureFile.type as "image/png" | "image/jpeg", base64: await encodeSignature(signatureFile) }] : [];
+      if (secondFile) signatures.push({ slot: 2, signerName: secondName, signerRole: secondRole,
+        mimeType: secondFile.type as "image/png" | "image/jpeg", base64: await encodeSignature(secondFile) });
       const result = await saveInstitutionTemplate({ data: {
         slug, name, basedOnId: sourceId || undefined, configuration: config,
+        signatures: signatureFile ? signatures : undefined,
       } });
       setMessage(`Plantilla guardada como versión ${result.version}. Podés elegirla al emitir.`);
       setSourceId(result.id);
@@ -39,6 +67,7 @@ export function ProductTemplateEditor({ slug, templates, canManage, onSaved }: {
   }
 
   const input = "mt-2 w-full rounded-lg border border-border bg-bg px-4 py-3 text-fg";
+  const source = templates.find((item) => item.id === sourceId);
   return <section aria-label="Plantillas institucionales">
     <h2 className="mt-8 text-2xl font-semibold">Plantillas institucionales</h2>
     <p className="mt-2 text-sm text-muted">Cada emisión conserva la versión seleccionada. Editar una plantilla crea una versión nueva.</p>
@@ -75,6 +104,30 @@ export function ProductTemplateEditor({ slug, templates, canManage, onSaved }: {
           <input className={input} maxLength={120} value={config.footer}
             onChange={(event) => setField("footer", event.target.value)} />
         </label>
+        <fieldset className="space-y-3 rounded-lg border border-border p-4">
+          <legend className="px-1 text-sm font-semibold">Firma institucional</legend>
+          <p className="text-xs text-muted">Usá la firma autorizada de la institución. PNG con fondo transparente o JPG, hasta 150 KB. La imagen queda privada y se conserva en esta versión.</p>
+          {source?.has_signature && <p className="text-xs text-primary">Esta versión tiene {source.signers.length} firma(s): {source.signers.map((signer) => signer.signerName).join(" y ")}. Si no cargás imágenes nuevas, se copian a la siguiente versión.</p>}
+          <label className="block text-sm">Nombre de quien firma
+            <input className={input} required={Boolean(signatureFile)} maxLength={100} value={signerName} onChange={(event) => setSignerName(event.target.value)} placeholder="Ej.: María Pérez" />
+          </label>
+          <label className="block text-sm">Cargo
+            <input className={input} required={Boolean(signatureFile)} maxLength={100} value={signerRole} onChange={(event) => setSignerRole(event.target.value)} placeholder="Ej.: Dirección de Formación" />
+          </label>
+          <label className="block text-sm">Imagen de la firma
+            <input key={`principal-${sourceId}`} className={input} type="file" accept="image/png,image/jpeg" onChange={(event) => setSignatureFile(event.target.files?.[0] || null)} />
+          </label>
+          <p className="pt-2 text-xs text-muted">Segunda firma, si corresponde:</p>
+          <label className="block text-sm">Nombre de la segunda persona
+            <input className={input} required={Boolean(secondFile)} maxLength={100} value={secondName} onChange={(event) => setSecondName(event.target.value)} />
+          </label>
+          <label className="block text-sm">Cargo de la segunda persona
+            <input className={input} required={Boolean(secondFile)} maxLength={100} value={secondRole} onChange={(event) => setSecondRole(event.target.value)} />
+          </label>
+          <label className="block text-sm">Imagen de la segunda firma
+            <input key={`segunda-${sourceId}`} className={input} type="file" accept="image/png,image/jpeg" onChange={(event) => setSecondFile(event.target.files?.[0] || null)} />
+          </label>
+        </fieldset>
         {error && <p role="alert" className="text-sm text-red-400">{error}</p>}
         {message && <p role="status" className="text-sm text-primary">{message}</p>}
         <button type="submit" disabled={saving} className="rounded-lg bg-primary px-5 py-3 font-semibold text-primary-fg disabled:opacity-50">
@@ -82,15 +135,28 @@ export function ProductTemplateEditor({ slug, templates, canManage, onSaved }: {
         </button>
       </div>
       <div>
-        <p className="mb-3 text-sm font-medium text-muted">Vista previa del texto y color</p>
-        <div className="rounded-lg border-2 bg-white px-5 py-10 text-center text-slate-800" style={{ borderColor: config.accentColor }}>
-          <p className="text-sm font-semibold" style={{ color: config.accentColor }}>Nombre de la institución</p>
-          <h3 className="mt-7 break-words text-2xl font-bold">{config.title}</h3>
-          <p className="mt-6 text-sm">{config.introduction}</p>
-          <p className="mt-3 text-xl font-semibold">Nombre Apellido</p>
-          <p className="mt-4 text-sm">{config.accomplishment}</p>
-          <p className="mt-3 font-semibold">Nombre de la capacitación</p>
-          {config.footer && <p className="mt-8 text-xs text-slate-600">{config.footer}</p>}
+        <p className="mb-3 text-sm font-medium text-muted">Vista previa de composición. El PDF incluye el QR y la firma cargada.</p>
+        <div className="border-[5px] border-[#172b42] bg-white p-2 text-center text-[#172b42]" style={{ boxShadow: `inset 0 0 0 1px ${config.accentColor}` }}>
+          <div className="mx-auto mt-3 flex h-9 w-9 items-center justify-center rounded-full bg-[#172b42] text-xs font-bold text-white">IN</div>
+          <p className="mt-2 font-serif text-xl font-bold">Nombre de la institución</p>
+          <p className="text-[10px] uppercase tracking-wide">Emisión institucional / Documento verificable</p>
+          <p className="mx-auto mt-5 w-fit rounded-full bg-stone-100 px-5 py-1 text-[10px] font-semibold uppercase">Constancia de formación</p>
+          <h3 className="mt-3 break-words font-serif text-3xl font-bold">{config.title}</h3>
+          <p className="mx-auto mt-1 w-fit rounded-full bg-stone-100 px-4 py-1 text-[10px] uppercase">Capacitación acreditada</p>
+          <p className="mt-4 font-serif text-sm">{config.introduction}</p>
+          <p className="mt-3 font-serif text-2xl italic" style={{ color: config.accentColor }}>Nombre Apellido</p>
+          <div className="mx-auto mt-2 h-px w-3/4 bg-[#ae9462]" />
+          <p className="mt-3 font-serif text-sm">{config.accomplishment}</p>
+          <p className="mt-3 font-serif text-lg font-bold">Nombre de la capacitación</p>
+          <div className="mt-5 grid grid-cols-4 border border-slate-300 text-[9px]">
+            {[["DNI", "00000000"], ["Duración", "40 horas"], ["Período", "2026"], ["Código único", "ABC-000001"]].map(([label, value]) =>
+              <div key={label} className="border-r border-slate-300 last:border-0"><p className="bg-[#172b42] p-1 font-semibold uppercase text-white">{label}</p><p className="p-1">{value}</p></div>)}
+          </div>
+          <div className="mt-4 flex items-end justify-between gap-3 text-left text-[10px]">
+            <div className="flex items-center gap-2"><div className="grid h-12 w-12 place-items-center border border-slate-300 font-bold">QR</div><span>Validación pública<br />Escaneá para verificar</span></div>
+            <div className="min-w-28 border-b border-[#ae9462] pb-1 text-center">{source?.signers[0]?.signerName || signerName || "Firma autorizada"}</div>
+          </div>
+          {config.footer && <p className="mt-3 text-xs text-slate-600">{config.footer}</p>}
         </div>
       </div>
     </form>}

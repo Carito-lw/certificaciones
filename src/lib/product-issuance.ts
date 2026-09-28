@@ -20,9 +20,35 @@ const templateInput = scope.extend({
   name: z.string().trim().min(2).max(80),
   basedOnId: z.uuid().optional(),
   configuration: templateConfigurationSchema,
+  signatures: z.array(z.object({
+    slot: z.union([z.literal(1), z.literal(2)]),
+    signerName: z.string().trim().min(2).max(100),
+    signerRole: z.string().trim().min(2).max(100),
+    mimeType: z.enum(["image/png", "image/jpeg"]),
+    base64: z.string().max(200000),
+  })).max(2).refine((items) => new Set(items.map((item) => item.slot)).size === items.length).optional(),
 });
 
 export async function createTemplateVersion(sql: Sql, userId: string, input: z.infer<typeof templateInput>) {
+  const imageInspector = input.signatures?.length ? new (await import("jspdf")).jsPDF() : null;
+  for (const signature of input.signatures || []) {
+    const bytes = Buffer.from(signature.base64, "base64");
+    const png = bytes.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex"));
+    const jpeg = bytes.subarray(0, 3).equals(Buffer.from("ffd8ff", "hex")) && bytes.subarray(-2).equals(Buffer.from("ffd9", "hex"));
+    if (bytes.length < 64 || bytes.length > 150000 ||
+      (signature.mimeType === "image/png" ? !png : !jpeg) ||
+      bytes.toString("base64") !== signature.base64) {
+      throw new Error("La firma debe ser una imagen PNG o JPG válida de hasta 150 KB.");
+    }
+    try {
+      const dimensions = imageInspector!.getImageProperties(`data:${signature.mimeType};base64,${signature.base64}`);
+      if (dimensions.width > 2000 || dimensions.height > 800 || dimensions.width < 10 || dimensions.height < 10) {
+        throw new Error("Dimensiones fuera de rango");
+      }
+    } catch {
+      throw new Error("La firma debe ser una imagen legible de entre 10×10 y 2000×800 píxeles.");
+    }
+  }
   let rows: { id: string; version: number }[];
   try {
     rows = await sql<{ id: string; version: number }>`
@@ -31,7 +57,7 @@ export async function createTemplateVersion(sql: Sql, userId: string, input: z.i
         where i.slug = ${input.slug} and i.status = 'active'
           and m.user_id = ${userId} and m.role in ('owner', 'admin')
       ), source as (
-        select p.id as institution_id, coalesce(t.name, ${input.name}::text) as name,
+        select p.id as institution_id, t.id as based_on_id, coalesce(t.name, ${input.name}::text) as name,
           case when ${input.basedOnId || null}::uuid is null then 1 else
             (select coalesce(max(v.version), 0) + 1 from certificate_templates v
              where v.institution_id = p.id and v.name = t.name) end as next_version
@@ -42,12 +68,25 @@ export async function createTemplateVersion(sql: Sql, userId: string, input: z.i
         insert into certificate_templates (institution_id, name, version, configuration)
         select institution_id, name, next_version, ${JSON.stringify(input.configuration)}::jsonb from source
         returning id, institution_id, name, version
+      ), signatures as (
+        insert into certificate_template_signatures
+          (institution_id, template_id, slot, signer_name, signer_role, mime_type, image_data)
+        select c.institution_id, c.id, s.slot, s."signerName", s."signerRole", s."mimeType", decode(s.base64, 'base64')
+        from created c cross join jsonb_to_recordset(${JSON.stringify(input.signatures || [])}::jsonb)
+          as s(slot smallint, "signerName" text, "signerRole" text, "mimeType" text, base64 text)
+        where ${input.signatures !== undefined}
+        union all
+        select c.institution_id, c.id, s.slot, s.signer_name, s.signer_role, s.mime_type, s.image_data
+        from created c join source src on src.institution_id = c.institution_id
+        join certificate_template_signatures s on s.institution_id = src.institution_id and s.template_id = src.based_on_id
+        where ${input.signatures === undefined}
+        returning template_id
       ), audited as (
         insert into audit_events (institution_id, actor_user_id, action, entity_type, entity_id, details)
         select institution_id, ${userId}, 'template.version_created', 'template', id,
           jsonb_build_object('name', name, 'version', version) from created
       )
-      select id, version from created
+      select c.id, c.version from created c
     `;
   } catch (error) {
     if (typeof error === "object" && error !== null && "code" in error && error.code === "23505") {
@@ -128,8 +167,16 @@ export async function updateEnrollmentOutcome(sql: Sql, userId: string, input: z
 }
 
 export async function getIssuancePanel(sql: Sql, userId: string, slug: string) {
-  const templateRows = await sql<{ id: string; name: string; version: number; configuration: unknown }>`
-    select t.id, t.name, t.version, t.configuration from certificate_templates t
+  const templateRows = await sql<{ id: string; name: string; version: number; configuration: unknown;
+    has_signature: boolean; signers: { slot: number; signerName: string; signerRole: string }[] }>`
+    select t.id, t.name, t.version, t.configuration,
+      exists(select 1 from certificate_template_signatures s
+        where s.institution_id = t.institution_id and s.template_id = t.id) as has_signature,
+      coalesce((select jsonb_agg(jsonb_build_object('slot', s.slot, 'signerName', s.signer_name,
+        'signerRole', s.signer_role) order by s.slot)
+        from certificate_template_signatures s where s.institution_id = t.institution_id and s.template_id = t.id),
+        '[]'::jsonb) as signers
+    from certificate_templates t
     join institutions i on i.id = t.institution_id
     join memberships m on m.institution_id = i.id
     where i.slug = ${slug} and i.status = 'active' and m.user_id = ${userId}
@@ -203,6 +250,8 @@ export async function issueCourseBatch(sql: Sql, userId: string, input: z.infer<
       where i.slug = ${input.slug} and i.status = 'active'
         and c.id = ${input.courseId} and c.status = 'active'
         and m.user_id = ${userId} and m.role in ('owner', 'admin', 'issuer')
+        and exists(select 1 from certificate_template_signatures sig
+          where sig.institution_id = i.id and sig.template_id = t.id)
     ), locked as (
       select e.id, e.institution_id, e.student_id
       from enrollments e join permitted p on p.institution_id = e.institution_id and p.course_id = e.course_id
@@ -257,7 +306,7 @@ export async function issueCourseBatch(sql: Sql, userId: string, input: z.infer<
     )
     select b.id as batch_id, (select count(*)::int from generated) as issued from batch b
   `;
-  if (!rows.length) throw new Error("No hay alumnos aptos pendientes, o no tenés permiso para emitir esta capacitación.");
+  if (!rows.length) throw new Error("No hay alumnos aptos pendientes, no tenés permiso, o la plantilla todavía no tiene una firma configurada.");
   return rows[0];
 }
 

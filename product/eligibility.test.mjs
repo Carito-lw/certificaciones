@@ -7,7 +7,8 @@ import { getCourseRoster, issueCourseBatch, markCourseEligible, updateEnrollment
 test("course review filters 55 students and excludes a non-eligible student from issuance", async () => {
   const db = new PGlite();
   try {
-    for (const path of ["migrations/auth/0001_auth.sql", "product/0002_auth_role.sql", "product/schema.sql", "product/zz_issuance.sql"]) {
+    await db.exec("create role anon; create role authenticated;");
+    for (const path of ["migrations/auth/0001_auth.sql", "product/0002_auth_role.sql", "product/schema.sql", "product/zz_issuance.sql", "product/signatures.sql"]) {
       await db.exec(readFileSync(path, "utf8"));
     }
     await db.query(`insert into "user" ("id", "name", "email", "emailVerified") values
@@ -24,6 +25,11 @@ test("course review filters 55 students and excludes a non-eligible student from
       select id, 'Curso', 'CUR', 12, '2026' from institutions where slug = 'city' returning id`);
     const template = await db.query(`insert into certificate_templates (institution_id, name, version, configuration)
       select id, 'Institucional', 1, '{}'::jsonb from institutions where slug = 'city' returning id`);
+    await db.query(`insert into certificate_template_signatures
+      (institution_id, template_id, slot, signer_name, signer_role, mime_type, image_data)
+      select institution_id, id, 1, 'Elena Ruiz', 'Dirección', 'image/png', decode($1, 'base64')
+      from certificate_templates where id = $2`,
+      ["iVBORw0KGgoAAAANSUhEUgAAAGQAAAAeCAYAAADaW7vzAAAA9klEQVR4Xu2XQQrDMBAD842e+4P8/28tPQTS0NgrW2vYMoWcopW04wTSbeMHAQhAAAIQgAAEIAABCGQReDz3192VlTnjW61veNfWYtd7YdNEYbW+YRQKbEUbLiAKlQ6KVqyRIz8XVhJG55SMX9rR3NG52b7heVdBl0+vuCvH5dPrK913l3L7XZdx+7v9JPhncXYRt7/bL/ugpYPJXu4o48px+fQgTeUcw72QlW/FXZfRRUfnFCa2jwXlE07Rzi4TOZRPn1ZOtb5fu1T7Q1S1r/ygthaVzRYMVOu7AAkREIAABCAAAQhAAAIQgAAEIAABCEDgXwi8ASwCBmibZ5q3AAAAAElFTkSuQmCC", template.rows[0].id]);
     await db.query(`insert into students (institution_id, first_name, last_name, document_number)
       select i.id, 'Nombre', 'Apellido' || lpad(n::text, 2, '0'), (900000 + n)::text
       from institutions i cross join generate_series(1, 55) n where i.slug = 'city'`);

@@ -21,6 +21,7 @@ try {
     ["saas_schema_v1", "product/schema.sql"],
     ["saas_issuance_v1", "product/zz_issuance.sql"],
     ["saas_private_tables_v1", "product/security/private_tables.sql"],
+    ["saas_template_signatures_v1", "product/signatures.sql"],
   ]) {
     const applied = await client.query("select 1 from _migrations where name = $1", [name]);
     if (applied.rowCount) continue;

@@ -8,7 +8,8 @@ import { getAuthorizedPdfData, renderInstitutionPdf } from "../src/lib/product-p
 test("issue 800 unique credentials, verify publicly, and revoke with tenant roles", async () => {
   const db = new PGlite();
   try {
-    for (const file of ["migrations/auth/0001_auth.sql", "product/0002_auth_role.sql", "product/schema.sql", "product/zz_issuance.sql"]) {
+    await db.exec("create role anon; create role authenticated;");
+    for (const file of ["migrations/auth/0001_auth.sql", "product/0002_auth_role.sql", "product/schema.sql", "product/zz_issuance.sql", "product/signatures.sql"]) {
       await db.exec(readFileSync(file, "utf8"));
     }
     await db.query(`insert into "user" ("id", "name", "email", "emailVerified") values
@@ -39,7 +40,9 @@ test("issue 800 unique credentials, verify publicly, and revoke with tenant role
       accentColor: "#17658C", title: "CERTIFICADO MUNICIPAL", introduction: "Se deja constancia de que",
       accomplishment: "aprobó satisfactoriamente la formación", footer: "Municipalidad de ejemplo",
     };
-    const settings = { slug: "city", name: "Institucional", basedOnId: template.rows[0].id, configuration };
+    const signatures = [{ slot: 1, signerName: "Elena Ruiz", signerRole: "Dirección de Formación",
+      mimeType: "image/png", base64: "iVBORw0KGgoAAAANSUhEUgAAAGQAAAAeCAYAAADaW7vzAAAA9klEQVR4Xu2XQQrDMBAD842e+4P8/28tPQTS0NgrW2vYMoWcopW04wTSbeMHAQhAAAIQgAAEIAABCGQReDz3192VlTnjW61veNfWYtd7YdNEYbW+YRQKbEUbLiAKlQ6KVqyRIz8XVhJG55SMX9rR3NG52b7heVdBl0+vuCvH5dPrK913l3L7XZdx+7v9JPhncXYRt7/bL/ugpYPJXu4o48px+fQgTeUcw72QlW/FXZfRRUfnFCa2jwXlE07Rzi4TOZRPn1ZOtb5fu1T7Q1S1r/ygthaVzRYMVOu7AAkREIAABCAAAQhAAAIQgAAEIAABCEDgXwi8ASwCBmibZ5q3AAAAAElFTkSuQmCC" }];
+    const settings = { slug: "city", name: "Institucional", basedOnId: template.rows[0].id, configuration, signatures };
     await assert.rejects(createTemplateVersion(sql, "issuer", settings), /No tenés permiso/);
     await assert.rejects(createTemplateVersion(sql, "outsider", settings), /No tenés permiso/);
     const versionTwo = await createTemplateVersion(sql, "owner", settings);
@@ -68,6 +71,7 @@ test("issue 800 unique credentials, verify publicly, and revoke with tenant role
     const versionThree = await createTemplateVersion(sql, "owner", { ...settings, basedOnId: versionTwo.id,
       configuration: { ...configuration, title: "SEGUNDA VERSIÓN" } });
     assert.equal(versionThree.version, 3);
+    assert.equal((await getIssuancePanel(sql, "owner", "city")).templates.find((item) => item.id === versionThree.id).has_signature, true);
     const old = await db.query("select snapshot from credentials where id = $1", [saved.rows[0].id]);
     assert.equal(old.rows[0].snapshot.templateConfiguration.title, configuration.title);
     assert.match(saved.rows[0].display_code, /^CI-INFO-\d{4}-000001$/);
@@ -79,6 +83,7 @@ test("issue 800 unique credentials, verify publicly, and revoke with tenant role
     await assert.rejects(getAuthorizedPdfData(sql, "outsider", { slug: "city", credentialId: saved.rows[0].id }), /No tenés acceso/);
     const pdfData = await getAuthorizedPdfData(sql, "issuer", { slug: "city", credentialId: saved.rows[0].id });
     assert.equal(pdfData.document_number, frozen.rows[0].snapshot.documentNumber);
+    assert.equal(pdfData.signatures[0].signerName, "Elena Ruiz");
     const pdf = await renderInstitutionPdf(pdfData, "https://credenciales.example.org");
     assert.equal(Buffer.from(pdf.base64, "base64").subarray(0, 5).toString(), "%PDF-");
     assert.equal(pdf.verificationUrl, `https://credenciales.example.org/producto/verificar/${saved.rows[0].public_id}`);
