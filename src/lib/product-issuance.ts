@@ -213,7 +213,7 @@ export async function issueCourseBatch(sql: Sql, userId: string, input: z.infer<
       for update of e skip locked
     ), eligible as (
       select e.id as enrollment_id, e.institution_id, e.student_id,
-        s.first_name, s.last_name,
+        s.first_name, s.last_name, s.document_number,
         row_number() over (order by e.id)::int as position
       from locked e join students s on s.institution_id = e.institution_id and s.id = e.student_id
     ), total as (select count(*)::int as amount from eligible),
@@ -240,6 +240,7 @@ export async function issueCourseBatch(sql: Sql, userId: string, input: z.infer<
         p.code_prefix || '-' || p.course_code || '-' || ${year}::text || '-' ||
           lpad((r.next_number - total.amount + item.row_number - 1)::text, 6, '0'),
         jsonb_build_object('studentName', e.first_name || ' ' || e.last_name,
+          'documentNumber', e.document_number,
           'institutionName', p.institution_name, 'courseName', p.course_name,
           'hours', p.hours, 'period', p.period,
           'primaryColor', coalesce(p.template_configuration->>'accentColor', p.primary_color),

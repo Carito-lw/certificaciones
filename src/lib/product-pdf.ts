@@ -10,14 +10,17 @@ const inputSchema = z.object({
 
 export async function getAuthorizedPdfData(sql: Sql, userId: string, input: z.infer<typeof inputSchema>) {
   const rows = await sql<{
-    public_id: string; display_code: string; issued_at: string; status: string;
+    public_id: string; display_code: string; issued_at: string; status: string; document_number: string | null;
     snapshot: { studentName: string; institutionName: string; courseName: string;
       hours: number; period: string; primaryColor: string | null;
       templateConfiguration?: Partial<TemplateConfiguration> };
   }>`
-    select cr.public_id, cr.display_code, cr.issued_at, cr.status, cr.snapshot
+    select cr.public_id, cr.display_code, cr.issued_at, cr.status, cr.snapshot,
+      coalesce(nullif(cr.snapshot->>'documentNumber', ''), s.document_number) as document_number
     from credentials cr join institutions i on i.id = cr.institution_id
     join memberships m on m.institution_id = i.id
+    left join enrollments e on e.id = cr.enrollment_id and e.institution_id = cr.institution_id
+    left join students s on s.id = e.student_id and s.institution_id = cr.institution_id
     where cr.id = ${input.credentialId} and i.slug = ${input.slug}
       and i.status = 'active' and m.user_id = ${userId}
   `;
@@ -64,11 +67,16 @@ export async function renderInstitutionPdf(data: PdfData, publicBaseUrl: string)
   pdf.setFillColor(255, 255, 255); pdf.rect(12, 11, width - 24, height - 22, "F");
   pdf.setDrawColor(214, 219, 221); pdf.setLineWidth(0.25); pdf.rect(12, 11, width - 24, height - 22);
   pdf.setFillColor(...accent); pdf.rect(12, 11, 3.5, height - 22, "F");
-  pdf.setFillColor(...accent); pdf.rect(28, 27, 1.6, 13, "F");
+  const initials = data.snapshot.institutionName.split(/\s+/)
+    .filter((word) => !/^(de|del|la|el|los|las|y)$/i.test(word)).slice(0, 2)
+    .map((word) => word[0]?.toLocaleUpperCase("es-AR") || "").join("") || "I";
+  pdf.setFillColor(...accent); pdf.circle(36, 33.5, 8, "F");
+  pdf.setTextColor(255, 255, 255); pdf.setFont("helvetica", "bold"); pdf.setFontSize(10);
+  pdf.text(initials, 36, 35.1, { align: "center" });
   pdf.setTextColor(...ink); pdf.setFont("helvetica", "bold"); pdf.setFontSize(13);
-  fitted(data.snapshot.institutionName, 36, 33, 176, 2, 13, 8, "helvetica", "bold", 1);
+  fitted(data.snapshot.institutionName, 49, 32.5, 165, 2, 13, 8, "helvetica", "bold", 1);
   pdf.setTextColor(...muted); pdf.setFont("helvetica", "normal"); pdf.setFontSize(7.5);
-  pdf.text("CREDENCIALES DIGITALES  /  EMISIÓN INSTITUCIONAL", 36, 40.5);
+  pdf.text("CREDENCIALES DIGITALES  /  EMISIÓN INSTITUCIONAL", 49, 42);
   pdf.setFont("helvetica", "bold"); pdf.setFontSize(8); pdf.setTextColor(...accentText);
   pdf.text("DOCUMENTO VERIFICABLE", 269, 34, { align: "right" });
   pdf.setDrawColor(224, 227, 227); pdf.line(28, 49, 269, 49);
@@ -84,16 +92,22 @@ export async function renderInstitutionPdf(data: PdfData, publicBaseUrl: string)
   pdf.setDrawColor(...accent); pdf.setLineWidth(0.7); pdf.line(28, 117, 59, 117);
   pdf.setTextColor(...muted);
   fitted(configuration.accomplishment, 28, 126, 182, 2, 10.5, 9, "helvetica", "normal", 1.15);
+  pdf.setFillColor(246, 248, 248); pdf.roundedRect(28, 136, 182, 21, 1, 1, "F");
+  pdf.setFillColor(...accent); pdf.rect(28, 136, 1.5, 21, "F");
+  pdf.setTextColor(...accentText); pdf.setFont("helvetica", "bold"); pdf.setFontSize(7.5);
+  pdf.text("CAPACITACIÓN ACREDITADA", 34, 142.5);
   pdf.setTextColor(...ink);
-  fitted(data.snapshot.courseName, 28, 143, 182, 2, 19, 9, "times", "bold", 1.04);
+  fitted(data.snapshot.courseName, 34, 149, 170, 2, 16, 9, "times", "bold", 1.04);
 
   pdf.setDrawColor(224, 227, 227); pdf.setLineWidth(0.3); pdf.line(28, 162, 210, 162);
   pdf.setTextColor(...accentText); pdf.setFont("helvetica", "bold"); pdf.setFontSize(8);
-  pdf.text("DURACIÓN", 28, 169); pdf.text("PERÍODO", 81, 169);
+  pdf.text("DNI / DOCUMENTO", 28, 169); pdf.text("DURACIÓN", 101, 169); pdf.text("PERÍODO", 147, 169);
   pdf.setTextColor(...ink); pdf.setFont("helvetica", "normal"); pdf.setFontSize(10);
-  pdf.text(`${data.snapshot.hours} horas`, 28, 175);
-  fitted(data.snapshot.period, 81, 175, 129, 1, 10, 8, "helvetica", "normal", 1);
+  fitted(data.document_number || "No informado", 28, 175, 66, 2, 10, 7, "helvetica", "normal", 1);
+  pdf.text(`${data.snapshot.hours} horas`, 101, 175);
+  fitted(data.snapshot.period, 147, 175, 62, 2, 10, 7, "helvetica", "normal", 1);
 
+  pdf.setFillColor(247, 249, 249); pdf.rect(224, 59, 47, 119, "F");
   pdf.setDrawColor(224, 227, 227); pdf.line(220, 59, 220, 179);
   pdf.setTextColor(...accentText); pdf.setFont("helvetica", "bold"); pdf.setFontSize(8);
   pdf.text("VALIDACIÓN PÚBLICA", 229, 68);

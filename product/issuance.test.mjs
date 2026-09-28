@@ -64,6 +64,7 @@ test("issue 800 unique credentials, verify publicly, and revoke with tenant role
     const frozen = await db.query("select snapshot from credentials where id = $1", [saved.rows[0].id]);
     assert.equal(frozen.rows[0].snapshot.templateVersion, 2);
     assert.equal(frozen.rows[0].snapshot.templateConfiguration.title, configuration.title);
+    assert.match(frozen.rows[0].snapshot.documentNumber, /^30000\d{3}$/);
     const versionThree = await createTemplateVersion(sql, "owner", { ...settings, basedOnId: versionTwo.id,
       configuration: { ...configuration, title: "SEGUNDA VERSIÓN" } });
     assert.equal(versionThree.version, 3);
@@ -77,9 +78,14 @@ test("issue 800 unique credentials, verify publicly, and revoke with tenant role
     assert.equal((await db.query("select count(*)::int as n from verification_events")).rows[0].n, 1);
     await assert.rejects(getAuthorizedPdfData(sql, "outsider", { slug: "city", credentialId: saved.rows[0].id }), /No tenés acceso/);
     const pdfData = await getAuthorizedPdfData(sql, "issuer", { slug: "city", credentialId: saved.rows[0].id });
+    assert.equal(pdfData.document_number, frozen.rows[0].snapshot.documentNumber);
     const pdf = await renderInstitutionPdf(pdfData, "https://credenciales.example.org");
     assert.equal(Buffer.from(pdf.base64, "base64").subarray(0, 5).toString(), "%PDF-");
     assert.equal(pdf.verificationUrl, `https://credenciales.example.org/producto/verificar/${saved.rows[0].public_id}`);
+    // Credentials issued before documentNumber was captured in the snapshot still show the private document.
+    await db.query("update credentials set snapshot = snapshot - 'documentNumber' where id = $1", [saved.rows[0].id]);
+    const olderPdfData = await getAuthorizedPdfData(sql, "issuer", { slug: "city", credentialId: saved.rows[0].id });
+    assert.equal(olderPdfData.document_number, pdfData.document_number);
     await assert.rejects(revokeInstitutionCredential(sql, "issuer", { slug: "city", credentialId: saved.rows[0].id, reason: "Error de emisión" }), /No se pudo/);
     await assert.rejects(revokeInstitutionCredential(sql, "outsider", { slug: "city", credentialId: saved.rows[0].id, reason: "Error de emisión" }), /No se pudo/);
     await revokeInstitutionCredential(sql, "owner", { slug: "city", credentialId: saved.rows[0].id, reason: "Error de emisión" });
