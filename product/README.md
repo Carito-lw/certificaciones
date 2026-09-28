@@ -13,7 +13,11 @@ temporal. `npm run build:product` compila este modo. En un despliegue nuevo,
 configurar únicamente `SAAS_DATABASE_URL` con una base vacía y distinta de la
 base de Breakpoint; el comando de build del sitio nuevo debe ser
 `npm run build:product`. El proceso ejecuta el esquema de autenticación y el
-esquema SaaS en orden. Nunca se copia información de los certificados reales.
+esquema SaaS en orden, activa RLS en las tablas públicas y retira los permisos
+de lectura y escritura de los roles `anon` y `authenticated` de Supabase. El
+servidor accede mediante la conexión privada `postgres`, con comprobaciones de
+sesión, institución y rol en cada operación. No habilitar acceso directo a las
+tablas desde el navegador. Nunca se copia información de los certificados reales.
 
 El panel inicial está en `/producto`: login, instituciones del usuario,
 estadísticas básicas, capacitaciones y alumnos por institución. Las consultas
