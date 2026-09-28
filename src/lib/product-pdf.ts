@@ -42,35 +42,80 @@ export async function renderInstitutionPdf(data: PdfData, publicBaseUrl: string)
   const configuration = readTemplateConfiguration(data.snapshot.templateConfiguration);
   const match = /^#[0-9a-fA-F]{6}$/.test(data.snapshot.templateConfiguration?.accentColor || "") ? configuration.accentColor :
     (/^#[0-9a-fA-F]{6}$/.test(data.snapshot.primaryColor || "") ? data.snapshot.primaryColor! : configuration.accentColor);
-  const rgb = [1, 3, 5].map((i) => Number.parseInt(match.slice(i, i + 2), 16)) as [number, number, number];
-  pdf.setFillColor(...rgb); pdf.rect(0, 0, width, 12, "F");
-  pdf.setFillColor(247, 248, 249); pdf.rect(0, 12, width, height - 12, "F");
-  pdf.setDrawColor(...rgb); pdf.setLineWidth(0.7); pdf.rect(12, 22, width - 24, height - 34);
-  pdf.setTextColor(...rgb); pdf.setFont("helvetica", "bold"); pdf.setFontSize(12);
-  pdf.text(data.snapshot.institutionName, width / 2, 36, { align: "center", maxWidth: 230 });
-  pdf.setTextColor(30, 38, 50); pdf.setFontSize(24);
-  pdf.text(pdf.splitTextToSize(configuration.title, 230).slice(0, 2), width / 2, 60, { align: "center" });
-  pdf.setFont("helvetica", "normal"); pdf.setFontSize(12);
-  pdf.text(pdf.splitTextToSize(configuration.introduction, 235).slice(0, 2), width / 2, 77, { align: "center" });
-  pdf.setFont("helvetica", "bold"); pdf.setFontSize(22);
-  pdf.text(data.snapshot.studentName, width / 2, 93, { align: "center", maxWidth: 236 });
-  pdf.setFont("helvetica", "normal"); pdf.setFontSize(12);
-  pdf.text(pdf.splitTextToSize(configuration.accomplishment, 228).slice(0, 2), width / 2, 108, { align: "center" });
-  pdf.setFont("helvetica", "bold"); pdf.setFontSize(16);
-  const courseLines = pdf.splitTextToSize(data.snapshot.courseName, 190).slice(0, 3);
-  pdf.text(courseLines, width / 2, 122, { align: "center" });
-  pdf.setFont("helvetica", "normal"); pdf.setFontSize(11);
-  pdf.text(`${data.snapshot.hours} horas · ${data.snapshot.period}`, width / 2, 148, { align: "center", maxWidth: 220 });
-  pdf.setFontSize(9); pdf.setTextColor(65, 70, 78);
-  if (configuration.footer) pdf.text(pdf.splitTextToSize(configuration.footer, 185).slice(0, 2), 24, 163);
-  pdf.text(`Código: ${data.display_code}`, 24, 177);
-  pdf.text(`Emisión: ${new Date(data.issued_at).toLocaleDateString("es-AR", { timeZone: "UTC" })}`, 24, 184);
+  const accent = [1, 3, 5].map((i) => Number.parseInt(match.slice(i, i + 2), 16)) as [number, number, number];
+  const ink: [number, number, number] = [28, 43, 60];
+  const muted: [number, number, number] = [91, 104, 115];
+  const accentText = accent[0] * 0.299 + accent[1] * 0.587 + accent[2] * 0.114 > 165 ? ink : accent;
+  const fitted = (value: string, x: number, y: number, maxWidth: number, maxLines: number,
+    size: number, minSize: number, family: "helvetica" | "times", style: "normal" | "bold", lineHeight: number) => {
+    pdf.setFont(family, style);
+    let lines: string[] = [];
+    for (let fontSize = size; fontSize >= minSize; fontSize -= 0.5) {
+      pdf.setFontSize(fontSize);
+      lines = pdf.splitTextToSize(value, maxWidth);
+      if (lines.length <= maxLines) break;
+    }
+    if (lines.length > maxLines) throw new Error("El texto del certificado excede el espacio disponible.");
+    pdf.text(lines, x, y, { lineHeightFactor: lineHeight });
+  };
+
+  // Quiet, formal stationery with the institution's own accent color.
+  pdf.setFillColor(246, 245, 242); pdf.rect(0, 0, width, height, "F");
+  pdf.setFillColor(255, 255, 255); pdf.rect(12, 11, width - 24, height - 22, "F");
+  pdf.setDrawColor(214, 219, 221); pdf.setLineWidth(0.25); pdf.rect(12, 11, width - 24, height - 22);
+  pdf.setFillColor(...accent); pdf.rect(12, 11, 3.5, height - 22, "F");
+  pdf.setFillColor(...accent); pdf.rect(28, 27, 1.6, 13, "F");
+  pdf.setTextColor(...ink); pdf.setFont("helvetica", "bold"); pdf.setFontSize(13);
+  fitted(data.snapshot.institutionName, 36, 33, 176, 2, 13, 8, "helvetica", "bold", 1);
+  pdf.setTextColor(...muted); pdf.setFont("helvetica", "normal"); pdf.setFontSize(7.5);
+  pdf.text("CREDENCIALES DIGITALES  /  EMISIÓN INSTITUCIONAL", 36, 40.5);
+  pdf.setFont("helvetica", "bold"); pdf.setFontSize(8); pdf.setTextColor(...accentText);
+  pdf.text("DOCUMENTO VERIFICABLE", 269, 34, { align: "right" });
+  pdf.setDrawColor(224, 227, 227); pdf.line(28, 49, 269, 49);
+
+  pdf.setTextColor(...accentText); pdf.setFont("helvetica", "bold"); pdf.setFontSize(8);
+  pdf.text("CONSTANCIA DE FORMACIÓN", 28, 62);
+  pdf.setTextColor(...ink);
+  fitted(configuration.title, 28, 76, 183, 2, 27, 17, "times", "bold", 1.0);
+  pdf.setTextColor(...muted);
+  fitted(configuration.introduction, 28, 88, 183, 2, 10.5, 8.5, "helvetica", "normal", 1.15);
+  pdf.setTextColor(...ink);
+  fitted(data.snapshot.studentName, 28, 104, 183, 2, 28, 9, "times", "bold", 1.0);
+  pdf.setDrawColor(...accent); pdf.setLineWidth(0.7); pdf.line(28, 117, 59, 117);
+  pdf.setTextColor(...muted);
+  fitted(configuration.accomplishment, 28, 126, 182, 2, 10.5, 9, "helvetica", "normal", 1.15);
+  pdf.setTextColor(...ink);
+  fitted(data.snapshot.courseName, 28, 143, 182, 2, 19, 9, "times", "bold", 1.04);
+
+  pdf.setDrawColor(224, 227, 227); pdf.setLineWidth(0.3); pdf.line(28, 162, 210, 162);
+  pdf.setTextColor(...accentText); pdf.setFont("helvetica", "bold"); pdf.setFontSize(8);
+  pdf.text("DURACIÓN", 28, 169); pdf.text("PERÍODO", 81, 169);
+  pdf.setTextColor(...ink); pdf.setFont("helvetica", "normal"); pdf.setFontSize(10);
+  pdf.text(`${data.snapshot.hours} horas`, 28, 175);
+  fitted(data.snapshot.period, 81, 175, 129, 1, 10, 8, "helvetica", "normal", 1);
+
+  pdf.setDrawColor(224, 227, 227); pdf.line(220, 59, 220, 179);
+  pdf.setTextColor(...accentText); pdf.setFont("helvetica", "bold"); pdf.setFontSize(8);
+  pdf.text("VALIDACIÓN PÚBLICA", 229, 68);
+  pdf.setTextColor(...muted); pdf.setFont("helvetica", "normal"); pdf.setFontSize(8);
+  pdf.text(["Escaneá el código para", "consultar el estado actual", "de esta credencial."], 229, 76, { lineHeightFactor: 1.45 });
   const matrix = encodeQrMatrix(verificationUrl, "M");
-  const side = 39, x0 = width - 68, y0 = height - 64, module = side / (matrix.length + 8);
+  const side = 37, x0 = 230, y0 = 104, module = side / (matrix.length + 8);
   pdf.setFillColor(255, 255, 255); pdf.rect(x0 - 2, y0 - 2, side + 4, side + 4, "F");
-  pdf.setFillColor(10, 16, 25);
+  pdf.setFillColor(15, 27, 39);
   matrix.forEach((row, y) => row.forEach((dark, x) => { if (dark) pdf.rect(x0 + (x + 4) * module, y0 + (y + 4) * module, module, module, "F"); }));
-  pdf.setTextColor(40, 47, 56); pdf.setFontSize(8); pdf.text("Verificá el estado con este QR", x0 + 17, y0 + 46, { align: "center" });
+  pdf.setTextColor(...muted); pdf.setFont("helvetica", "normal"); pdf.setFontSize(7.5);
+  pdf.text("Verificá su vigencia online", 248.5, 150, { align: "center" });
+
+  pdf.setFillColor(...ink); pdf.rect(15.5, 183, width - 27.5, 16, "F");
+  pdf.setTextColor(255, 255, 255); pdf.setFont("helvetica", "bold"); pdf.setFontSize(8);
+  pdf.text(`CÓDIGO ÚNICO  ${data.display_code}`, 28, 190);
+  pdf.setFont("helvetica", "normal"); pdf.setFontSize(8);
+  pdf.text(`Emitido el ${new Date(data.issued_at).toLocaleDateString("es-AR", { timeZone: "UTC" })}`, 28, 195);
+  if (configuration.footer) {
+    pdf.setTextColor(220, 228, 232);
+    fitted(configuration.footer, 138, 194, 128, 2, 8, 7, "helvetica", "normal", 1.05);
+  }
   return { base64: Buffer.from(pdf.output("arraybuffer")).toString("base64"), filename: `Credencial_${data.display_code}.pdf`, verificationUrl };
 }
 
