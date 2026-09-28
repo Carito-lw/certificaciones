@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { createFileRoute, Link, redirect, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, redirect, useMatch, useRouter } from "@tanstack/react-router";
 import { createCourseEnrollment, createInstitutionCourse, createInstitutionStudent, getInstitutionPanel, getProductSession } from "@/lib/product";
 import { confirmInstitutionImport, previewInstitutionImport, type ImportInput } from "@/lib/product-import";
 import { downloadStudentTemplate, parseStudentSheet } from "@/lib/product-spreadsheet";
@@ -23,6 +23,7 @@ export const Route = createFileRoute("/producto/$slug")({
 function InstitutionPanel() {
   const { institution, courses, students, enrollments, issuance } = Route.useLoaderData();
   const router = useRouter();
+  const courseRosterMatch = useMatch({ from: "/producto/$slug/curso/$courseId", shouldThrow: false });
   const [tab, setTab] = useState<"courses" | "students" | "credentials" | "templates">("courses");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -168,6 +169,7 @@ function InstitutionPanel() {
 
   const inputClass = "mt-1 w-full rounded-lg border border-border bg-bg px-3 py-2.5 text-fg";
   const labelClass = "block text-sm font-medium";
+  if (courseRosterMatch) return <Outlet />;
   return (
     <main className="min-h-dvh bg-bg px-5 py-12 text-fg md:px-12">
       <div className="mx-auto max-w-5xl">
